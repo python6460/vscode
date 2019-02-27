@@ -6,7 +6,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'vs/base/common/path';
 import * as os from 'os';
 import { URI } from 'vs/base/common/uri';
 import { Registry } from 'vs/platform/registry/common/platform';
@@ -19,12 +19,12 @@ import { IConfigurationRegistry, Extensions as ConfigurationExtensions, Configur
 import { WorkspaceService } from 'vs/workbench/services/configuration/node/configurationService';
 import { ISingleFolderWorkspaceInitializationPayload } from 'vs/platform/workspaces/common/workspaces';
 import { ConfigurationEditingErrorCode } from 'vs/workbench/services/configuration/node/configurationEditingService';
-import { IFileService } from 'vs/platform/files/common/files';
+import { IFileService, FileChangesEvent, FileChangeType } from 'vs/platform/files/common/files';
 import { IWorkspaceContextService, WorkbenchState, IWorkspaceFoldersChangeEvent } from 'vs/platform/workspace/common/workspace';
 import { ConfigurationTarget, IConfigurationService, IConfigurationChangeEvent } from 'vs/platform/configuration/common/configuration';
 import { workbenchInstantiationService, TestTextResourceConfigurationService, TestTextFileService, TestLifecycleService, TestEnvironmentService, TestStorageService } from 'vs/workbench/test/workbenchTestServices';
 import { TestNotificationService } from 'vs/platform/notification/test/common/testNotificationService';
-import { FileService } from 'vs/workbench/services/files/electron-browser/fileService';
+import { FileService } from 'vs/workbench/services/files/node/fileService';
 import { TestInstantiationService } from 'vs/platform/instantiation/test/common/instantiationServiceMock';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
 import { ITextModelService } from 'vs/editor/common/services/resolverService';
@@ -32,8 +32,12 @@ import { TextModelResolverService } from 'vs/workbench/services/textmodelResolve
 import { IJSONEditingService } from 'vs/workbench/services/configuration/common/jsonEditing';
 import { JSONEditingService } from 'vs/workbench/services/configuration/node/jsonEditingService';
 import { IWorkspaceConfigurationService } from 'vs/workbench/services/configuration/common/configuration';
-import { Uri } from 'vscode';
 import { createHash } from 'crypto';
+import { Emitter, Event } from 'vs/base/common/event';
+import { Schemas } from 'vs/base/common/network';
+import { originalFSPath } from 'vs/base/common/resources';
+import { isLinux } from 'vs/base/common/platform';
+import { IWorkspaceIdentifier } from 'vs/workbench/services/configuration/node/configuration';
 
 class SettingsTestEnvironmentService extends EnvironmentService {
 
@@ -56,14 +60,14 @@ function setUpFolder(folderName: string, parentDir: string): Promise<string> {
 	return Promise.resolve(pfs.mkdirp(workspaceSettingsDir, 493).then(() => folderDir));
 }
 
-function convertToWorkspacePayload(folder: Uri): ISingleFolderWorkspaceInitializationPayload {
+function convertToWorkspacePayload(folder: URI): ISingleFolderWorkspaceInitializationPayload {
 	return {
 		id: createHash('md5').update(folder.fsPath).digest('hex'),
 		folder
 	} as ISingleFolderWorkspaceInitializationPayload;
 }
 
-function setUpWorkspace(folders: string[]): Promise<{ parentDir: string, configPath: string }> {
+function setUpWorkspace(folders: string[]): Promise<{ parentDir: string, configPath: URI }> {
 
 	const id = uuid.generateUuid();
 	const parentDir = path.join(os.tmpdir(), 'vsctests', id);
@@ -75,7 +79,7 @@ function setUpWorkspace(folders: string[]): Promise<{ parentDir: string, configP
 			fs.writeFileSync(configPath, JSON.stringify(workspace, null, '\t'));
 
 			return Promise.all(folders.map(folder => setUpFolder(folder, parentDir)))
-				.then(() => ({ parentDir, configPath }));
+				.then(() => ({ parentDir, configPath: URI.file(configPath) }));
 		}));
 
 }
@@ -140,7 +144,7 @@ suite('WorkspaceContextService - Folder', () => {
 
 suite('WorkspaceContextService - Workspace', () => {
 
-	let parentResource: string, testObject: WorkspaceService;
+	let parentResource: string, testObject: WorkspaceService, instantiationService: TestInstantiationService, fileChangeEvent: Emitter<FileChangesEvent> = new Emitter<FileChangesEvent>();
 
 	setup(() => {
 		return setUpWorkspace(['a', 'b'])
@@ -151,14 +155,16 @@ suite('WorkspaceContextService - Workspace', () => {
 				const environmentService = new SettingsTestEnvironmentService(parseArgs(process.argv), process.execPath, path.join(parentDir, 'settings.json'));
 				const workspaceService = new WorkspaceService(environmentService);
 
-				const instantiationService = <TestInstantiationService>workbenchInstantiationService();
+				instantiationService = <TestInstantiationService>workbenchInstantiationService();
 				instantiationService.stub(IWorkspaceContextService, workspaceService);
 				instantiationService.stub(IConfigurationService, workspaceService);
 				instantiationService.stub(IEnvironmentService, environmentService);
 
-				return workspaceService.initialize({ id: configPath, configPath }).then(() => {
+				return workspaceService.initialize(getWorkspaceIdentifier(configPath)).then(() => {
 
-					const fileService = new FileService(<IWorkspaceContextService>workspaceService, TestEnvironmentService, new TestTextResourceConfigurationService(), workspaceService, new TestLifecycleService(), new TestStorageService(), new TestNotificationService(), { disableWatcher: true });
+					const fileService = new (class TestFileService extends FileService {
+						get onFileChanges(): Event<FileChangesEvent> { return fileChangeEvent.event; }
+					})(<IWorkspaceContextService>workspaceService, TestEnvironmentService, new TestTextResourceConfigurationService(), workspaceService, new TestLifecycleService(), new TestStorageService(), new TestNotificationService(), { disableWatcher: true });
 					instantiationService.stub(IFileService, fileService);
 					instantiationService.stub(ITextFileService, instantiationService.createInstance(TestTextFileService));
 					instantiationService.stub(ITextModelService, <ITextModelService>instantiationService.createInstance(TextModelResolverService));
@@ -293,7 +299,15 @@ suite('WorkspaceContextService - Workspace', () => {
 					done();
 				});
 				const workspace = { folders: [{ path: folders[0].uri.fsPath }, { path: folders[1].uri.fsPath }] };
-				fs.writeFileSync(testObject.getWorkspace().configuration!.fsPath, JSON.stringify(workspace, null, '\t'));
+				instantiationService.get(IFileService).updateContent(testObject.getWorkspace().configuration, JSON.stringify(workspace, null, '\t'))
+					.then(() => {
+						fileChangeEvent.fire(new FileChangesEvent([
+							{
+								resource: testObject.getWorkspace().configuration,
+								type: FileChangeType.UPDATED
+							}
+						]));
+					}, done);
 			}, done);
 	});
 
@@ -380,7 +394,7 @@ suite('WorkspaceContextService - Workspace', () => {
 
 suite('WorkspaceService - Initialization', () => {
 
-	let parentResource: string, workspaceConfigPath: string, testObject: WorkspaceService, globalSettingsFile: string;
+	let parentResource: string, workspaceConfigPath: URI, testObject: WorkspaceService, globalSettingsFile: string;
 	const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 	suiteSetup(() => {
@@ -508,7 +522,7 @@ suite('WorkspaceService - Initialization', () => {
 				testObject.onDidChangeWorkspaceFolders(target);
 				testObject.onDidChangeConfiguration(target);
 
-				return testObject.initialize({ id: workspaceConfigPath, configPath: workspaceConfigPath })
+				return testObject.initialize(getWorkspaceIdentifier(workspaceConfigPath))
 					.then(() => {
 						assert.equal(target.callCount, 3);
 						assert.deepEqual(target.args[0], [WorkbenchState.WORKSPACE]);
@@ -537,7 +551,7 @@ suite('WorkspaceService - Initialization', () => {
 				fs.writeFileSync(path.join(parentResource, '1', '.vscode', 'settings.json'), '{ "initialization.testSetting1": "workspaceValue1" }');
 				fs.writeFileSync(path.join(parentResource, '2', '.vscode', 'settings.json'), '{ "initialization.testSetting2": "workspaceValue2" }');
 
-				return testObject.initialize({ id: workspaceConfigPath, configPath: workspaceConfigPath })
+				return testObject.initialize(getWorkspaceIdentifier(workspaceConfigPath))
 					.then(() => {
 						assert.equal(target.callCount, 4);
 						assert.deepEqual((<IConfigurationChangeEvent>target.args[0][0]).affectedKeys, ['initialization.testSetting1', 'initialization.testSetting2']);
@@ -618,7 +632,7 @@ suite('WorkspaceService - Initialization', () => {
 				testObject.onDidChangeConfiguration(target);
 
 				fs.writeFileSync(path.join(parentResource, '1', '.vscode', 'settings.json'), '{ "initialization.testSetting1": "workspaceValue2" }');
-				return testObject.initialize({ id: workspaceConfigPath, configPath: workspaceConfigPath })
+				return testObject.initialize(getWorkspaceIdentifier(workspaceConfigPath))
 					.then(() => {
 						assert.equal(target.callCount, 4);
 						assert.deepEqual((<IConfigurationChangeEvent>target.args[0][0]).affectedKeys, ['initialization.testSetting1']);
@@ -898,6 +912,18 @@ suite('WorkspaceConfigurationService - Folder', () => {
 			.then(() => assert.ok(target.called));
 	});
 
+	test('update memory configuration', () => {
+		return testObject.updateValue('configurationService.folder.testSetting', 'memoryValue', ConfigurationTarget.MEMORY)
+			.then(() => assert.equal(testObject.getValue('configurationService.folder.testSetting'), 'memoryValue'));
+	});
+
+	test('update memory configuration should trigger change event before promise is resolve', () => {
+		const target = sinon.spy();
+		testObject.onDidChangeConfiguration(target);
+		return testObject.updateValue('configurationService.folder.testSetting', 'memoryValue', ConfigurationTarget.MEMORY)
+			.then(() => assert.ok(target.called));
+	});
+
 	test('update task configuration should trigger change event before promise is resolve', () => {
 		const target = sinon.spy();
 		testObject.onDidChangeConfiguration(target);
@@ -949,7 +975,7 @@ suite('WorkspaceConfigurationService-Multiroot', () => {
 				instantiationService.stub(IConfigurationService, workspaceService);
 				instantiationService.stub(IEnvironmentService, environmentService);
 
-				return workspaceService.initialize({ id: configPath, configPath }).then(() => {
+				return workspaceService.initialize(getWorkspaceIdentifier(configPath)).then(() => {
 
 					const fileService = new FileService(<IWorkspaceContextService>workspaceService, TestEnvironmentService, new TestTextResourceConfigurationService(), workspaceService, new TestLifecycleService(), new TestStorageService(), new TestNotificationService(), { disableWatcher: true });
 					instantiationService.stub(IFileService, fileService);
@@ -1202,6 +1228,18 @@ suite('WorkspaceConfigurationService-Multiroot', () => {
 			});
 	});
 
+	test('update memory configuration', () => {
+		return testObject.updateValue('configurationService.workspace.testSetting', 'memoryValue', ConfigurationTarget.MEMORY)
+			.then(() => assert.equal(testObject.getValue('configurationService.workspace.testSetting'), 'memoryValue'));
+	});
+
+	test('update memory configuration should trigger change event before promise is resolve', () => {
+		const target = sinon.spy();
+		testObject.onDidChangeConfiguration(target);
+		return testObject.updateValue('configurationService.workspace.testSetting', 'memoryValue', ConfigurationTarget.MEMORY)
+			.then(() => assert.ok(target.called));
+	});
+
 	test('update tasks configuration in a folder', () => {
 		const workspace = workspaceContextService.getWorkspace();
 		return testObject.updateValue('tasks', { 'version': '1.0.0', tasks: [{ 'taskName': 'myTask' }] }, { resource: workspace.folders[0].uri }, ConfigurationTarget.WORKSPACE_FOLDER)
@@ -1229,3 +1267,19 @@ suite('WorkspaceConfigurationService-Multiroot', () => {
 			});
 	});
 });
+
+function getWorkspaceId(configPath: URI): string {
+	let workspaceConfigPath = configPath.scheme === Schemas.file ? originalFSPath(configPath) : configPath.toString();
+	if (!isLinux) {
+		workspaceConfigPath = workspaceConfigPath.toLowerCase(); // sanitize for platform file system
+	}
+
+	return createHash('md5').update(workspaceConfigPath).digest('hex');
+}
+
+export function getWorkspaceIdentifier(configPath: URI): IWorkspaceIdentifier {
+	return {
+		configPath,
+		id: getWorkspaceId(configPath)
+	};
+}

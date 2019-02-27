@@ -7,21 +7,20 @@ import * as nls from 'vs/nls';
 import * as DOM from 'vs/base/browser/dom';
 import { Registry } from 'vs/platform/registry/common/platform';
 import { Action, IAction } from 'vs/base/common/actions';
-import { ITree } from 'vs/base/parts/tree/browser/tree';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { IViewlet } from 'vs/workbench/common/viewlet';
 import { Composite, CompositeDescriptor, CompositeRegistry } from 'vs/workbench/browser/composite';
 import { IConstructorSignature0 } from 'vs/platform/instantiation/common/instantiation';
-import { ToggleSidebarVisibilityAction } from 'vs/workbench/browser/actions/toggleSidebarVisibility';
+import { ToggleSidebarVisibilityAction, ToggleSidebarPositionAction } from 'vs/workbench/browser/actions/layoutActions';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IPartService, Parts } from 'vs/workbench/services/part/common/partService';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
-import { IEditorGroupsService } from 'vs/workbench/services/group/common/editorGroupsService';
+import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { URI } from 'vs/base/common/uri';
-import { ToggleSidebarPositionAction } from 'vs/workbench/browser/actions/toggleSidebarPosition';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { IStorageService } from 'vs/platform/storage/common/storage';
 import { AsyncDataTree } from 'vs/base/browser/ui/tree/asyncDataTree';
+import { AbstractTree } from 'vs/base/browser/ui/tree/abstractTree';
 
 export abstract class Viewlet extends Composite implements IViewlet {
 
@@ -84,6 +83,16 @@ export class ViewletRegistry extends CompositeRegistry<Viewlet> {
 	 */
 	registerViewlet(descriptor: ViewletDescriptor): void {
 		super.registerComposite(descriptor);
+	}
+
+	/**
+	 * Deregisters a viewlet to the platform.
+	 */
+	deregisterViewlet(id: string): void {
+		if (id === this.defaultViewletId) {
+			throw new Error('Cannot deregister default viewlet');
+		}
+		super.deregisterComposite(id);
 	}
 
 	/**
@@ -164,31 +173,11 @@ export class ShowViewletAction extends Action {
 	}
 }
 
-// Collapse All action
 export class CollapseAction extends Action {
-
-	constructor(viewer: ITree, enabled: boolean, clazz: string) {
-		super('workbench.action.collapse', nls.localize('collapse', "Collapse All"), clazz, enabled, (context: any) => {
-			if (viewer.getHighlight()) {
-				return Promise.resolve(null); // Global action disabled if user is in edit mode from another action
-			}
-
-			viewer.collapseAll();
-			viewer.clearSelection();
-			viewer.clearFocus();
-			viewer.domFocus();
-			viewer.focusFirst();
-
-			return Promise.resolve(null);
-		});
-	}
-}
-
-// Collapse All action for the new tree
-export class CollapseAction2 extends Action {
-	constructor(tree: AsyncDataTree<any, any>, enabled: boolean, clazz: string) {
+	constructor(tree: AsyncDataTree<any, any, any> | AbstractTree<any, any, any>, enabled: boolean, clazz?: string) {
 		super('workbench.action.collapse', nls.localize('collapse', "Collapse All"), clazz, enabled, () => {
 			tree.collapseAll();
+
 			return Promise.resolve(undefined);
 		});
 	}

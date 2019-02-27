@@ -48,6 +48,7 @@ import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiati
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { IThemeService, registerThemingParticipant } from 'vs/platform/theme/common/themeService';
+import { IAccessibilityService } from 'vs/platform/accessibility/common/accessibility';
 
 let EDITOR_ID = 0;
 
@@ -237,7 +238,8 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 		@ICommandService commandService: ICommandService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IThemeService themeService: IThemeService,
-		@INotificationService notificationService: INotificationService
+		@INotificationService notificationService: INotificationService,
+		@IAccessibilityService accessibilityService: IAccessibilityService
 	) {
 		super();
 		this._domElement = domElement;
@@ -248,7 +250,7 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 		this._telemetryData = codeEditorWidgetOptions.telemetryData;
 
 		options = options || {};
-		this._configuration = this._register(this._createConfiguration(options));
+		this._configuration = this._register(this._createConfiguration(options, accessibilityService));
 		this._register(this._configuration.onDidChange((e) => {
 			this._onDidChangeConfiguration.fire(e);
 
@@ -320,8 +322,8 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 		this._codeEditorService.addCodeEditor(this);
 	}
 
-	protected _createConfiguration(options: editorOptions.IEditorOptions): editorCommon.IConfiguration {
-		return new Configuration(options, this._domElement);
+	protected _createConfiguration(options: editorOptions.IEditorOptions, accessibilityService: IAccessibilityService): editorCommon.IConfiguration {
+		return new Configuration(options, this._domElement, accessibilityService);
 	}
 
 	public getId(): string {
@@ -801,8 +803,7 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 		const contributionsState: { [key: string]: any } = {};
 
 		const keys = Object.keys(this._contributions);
-		for (let i = 0, len = keys.length; i < len; i++) {
-			const id = keys[i];
+		for (const id of keys) {
 			const contribution = this._contributions[id];
 			if (typeof contribution.saveViewState === 'function') {
 				contributionsState[id] = contribution.saveViewState();
@@ -843,10 +844,6 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 			}
 
 			const reducedState = this._modelData.viewModel.reduceRestoreState(codeEditorState.viewState);
-			const linesViewportData = this._modelData.viewModel.viewLayout.getLinesViewportDataAtScrollTop(reducedState.scrollTop);
-			const startPosition = this._modelData.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(linesViewportData.startLineNumber, 1));
-			const endPosition = this._modelData.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(linesViewportData.endLineNumber, 1));
-			this._modelData.model.tokenizeViewport(startPosition.lineNumber, endPosition.lineNumber);
 			this._modelData.view.restoreState(reducedState);
 		}
 	}

@@ -12,7 +12,7 @@ import { IEnvironmentService } from 'vs/platform/environment/common/environment'
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { ExtHostCustomersRegistry } from 'vs/workbench/api/electron-browser/extHostCustomers';
 import { ExtHostContext, ExtHostExtensionServiceShape, IExtHostContext, MainContext } from 'vs/workbench/api/node/extHost.protocol';
-import { ProfileSession } from 'vs/workbench/services/extensions/common/extensions';
+import { ProfileSession, IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
 import { IExtensionHostStarter } from 'vs/workbench/services/extensions/electron-browser/extensionHost';
 import { ExtensionHostProfiler } from 'vs/workbench/services/extensions/electron-browser/extensionHostProfiler';
 import { ProxyIdentifier } from 'vs/workbench/services/extensions/node/proxyIdentifier';
@@ -187,8 +187,7 @@ export class ExtensionHostProcessManager extends Disposable {
 
 		// Customers
 		const customers = ExtHostCustomersRegistry.getCustomers();
-		for (let i = 0, len = customers.length; i < len; i++) {
-			const ctor = customers[i];
+		for (const ctor of customers) {
 			const instance = this._instantiationService.createInstance(ctor, extHostContext);
 			this._extensionHostProcessCustomers.push(instance);
 		}
@@ -198,6 +197,12 @@ export class ExtensionHostProcessManager extends Disposable {
 		this._extensionHostProcessRPCProtocol.assertRegistered(expected);
 
 		return this._extensionHostProcessRPCProtocol.getProxy(ExtHostContext.ExtHostExtensionService);
+	}
+
+	public activate(extension: ExtensionIdentifier, activationEvent: string): Promise<boolean> {
+		return this._extensionHostProcessProxy.then((proxy) => {
+			return proxy.value.$activate(extension, activationEvent);
+		});
 	}
 
 	public activateByEvent(activationEvent: string): Promise<void> {
@@ -237,11 +242,25 @@ export class ExtensionHostProcessManager extends Disposable {
 	}
 
 	public resolveAuthority(remoteAuthority: string): Promise<ResolvedAuthority> {
+		const authorityPlusIndex = remoteAuthority.indexOf('+');
+		if (authorityPlusIndex === -1) {
+			// This authority does not need to be resolved, simply parse the port number
+			const pieces = remoteAuthority.split(':');
+			return Promise.resolve({
+				authority: remoteAuthority,
+				host: pieces[0],
+				port: parseInt(pieces[1], 10)
+			});
+		}
 		return this._extensionHostProcessProxy.then(proxy => proxy.value.$resolveAuthority(remoteAuthority));
 	}
 
 	public start(enabledExtensionIds: ExtensionIdentifier[]): Promise<void> {
 		return this._extensionHostProcessProxy.then(proxy => proxy.value.$startExtensionHost(enabledExtensionIds));
+	}
+
+	public deltaExtensions(toAdd: IExtensionDescription[], toRemove: ExtensionIdentifier[]): Promise<void> {
+		return this._extensionHostProcessProxy.then(proxy => proxy.value.$deltaExtensions(toAdd, toRemove));
 	}
 }
 
@@ -333,7 +352,7 @@ function getLatencyTestProviders(): ExtHostLatencyProvider[] {
 
 export class MeasureExtHostLatencyAction extends Action {
 	public static readonly ID = 'editor.action.measureExtHostLatency';
-	public static readonly LABEL = nls.localize('measureExtHostLatency', "Developer: Measure Extension Host Latency");
+	public static readonly LABEL = nls.localize('measureExtHostLatency', "Measure Extension Host Latency");
 
 	constructor(
 		id: string,
@@ -364,4 +383,4 @@ export class MeasureExtHostLatencyAction extends Action {
 }
 
 const registry = Registry.as<IWorkbenchActionRegistry>(ActionExtensions.WorkbenchActions);
-registry.registerWorkbenchAction(new SyncActionDescriptor(MeasureExtHostLatencyAction, MeasureExtHostLatencyAction.ID, MeasureExtHostLatencyAction.LABEL), 'Developer: Measure Extension Host Latency');
+registry.registerWorkbenchAction(new SyncActionDescriptor(MeasureExtHostLatencyAction, MeasureExtHostLatencyAction.ID, MeasureExtHostLatencyAction.LABEL), 'Developer: Measure Extension Host Latency', nls.localize('developer', "Developer"));

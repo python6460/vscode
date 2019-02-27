@@ -7,8 +7,8 @@ import 'vs/code/code.main';
 import { app, dialog } from 'electron';
 import { assign } from 'vs/base/common/objects';
 import * as platform from 'vs/base/common/platform';
-import product from 'vs/platform/node/product';
-import { parseMainProcessArgv } from 'vs/platform/environment/node/argv';
+import product from 'vs/platform/product/node/product';
+import { parseMainProcessArgv } from 'vs/platform/environment/node/argvHelper';
 import { mkdirp } from 'vs/base/node/pfs';
 import { validatePaths } from 'vs/code/node/paths';
 import { LifecycleService, ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
@@ -114,7 +114,7 @@ function setupIPC(accessor: ServicesAccessor): Promise<Server> {
 				client => {
 
 					// Tests from CLI require to be the only instance currently
-					if (environmentService.extensionTestsPath && !environmentService.debugExtensionHost.break) {
+					if (environmentService.extensionTestsLocationURI && !environmentService.debugExtensionHost.break) {
 						const msg = 'Running extension tests from the command line is currently only supported if no other instance of Code is running.';
 						logService.error(msg);
 						client.dispose();
@@ -158,7 +158,7 @@ function setupIPC(accessor: ServicesAccessor): Promise<Server> {
 					logService.trace('Sending env to running instance...');
 
 					return allowSetForegroundWindow(service)
-						.then(() => service.start(environmentService.args, process.env))
+						.then(() => service.start(environmentService.args, process.env as platform.IProcessEnvironment))
 						.then(() => client.dispose())
 						.then(() => {
 
@@ -316,14 +316,14 @@ function createServices(args: ParsedArgs, bufferLogService: BufferLogService): I
 function initServices(environmentService: IEnvironmentService, stateService: StateService): Promise<any> {
 
 	// Ensure paths for environment service exist
-	const environmentServiceInitialization = Promise.all([
+	const environmentServiceInitialization = Promise.all<boolean | undefined>([
 		environmentService.extensionsPath,
 		environmentService.nodeCachedDataDir,
 		environmentService.logsPath,
 		environmentService.globalStorageHome,
 		environmentService.workspaceStorageHome,
 		environmentService.backupHome
-	].map(path => path && mkdirp(path)));
+	].map((path): undefined | Promise<boolean> => path ? mkdirp(path) : undefined));
 
 	// State service
 	const stateServiceInitialization = stateService.init();
