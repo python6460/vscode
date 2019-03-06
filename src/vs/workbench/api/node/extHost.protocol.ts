@@ -142,7 +142,7 @@ export interface MainThreadConfigurationShape extends IDisposable {
 }
 
 export interface MainThreadDiagnosticsShape extends IDisposable {
-	$changeMany(owner: string, entries: [UriComponents, IMarkerData[]][]): void;
+	$changeMany(owner: string, entries: [UriComponents, IMarkerData[] | undefined][]): void;
 	$clear(owner: string): void;
 }
 
@@ -460,7 +460,7 @@ export interface MainThreadQuickOpenShape extends IDisposable {
 	$show(instance: number, options: IPickOptions<TransferQuickPickItems>, token: CancellationToken): Promise<number | number[] | undefined>;
 	$setItems(instance: number, items: TransferQuickPickItems[]): Promise<void>;
 	$setError(instance: number, error: Error): Promise<void>;
-	$input(options: vscode.InputBoxOptions, validateInput: boolean, token: CancellationToken): Promise<string>;
+	$input(options: vscode.InputBoxOptions | undefined, validateInput: boolean, token: CancellationToken): Promise<string>;
 	$createOrUpdate(params: TransferQuickInput): Promise<void>;
 	$dispose(id: number): Promise<void>;
 }
@@ -527,7 +527,7 @@ export interface ExtHostUrlsShape {
 }
 
 export interface MainThreadWorkspaceShape extends IDisposable {
-	$startFileSearch(includePattern: string | undefined, includeFolder: URI | undefined, excludePatternOrDisregardExcludes: string | false, maxResults: number, token: CancellationToken): Promise<UriComponents[] | undefined>;
+	$startFileSearch(includePattern: string | undefined, includeFolder: URI | undefined, excludePatternOrDisregardExcludes: string | false | undefined, maxResults: number, token: CancellationToken): Promise<UriComponents[] | undefined>;
 	$startTextSearch(query: IPatternInfo, options: ITextQueryBuilderOptions, requestId: number, token: CancellationToken): Promise<vscode.TextSearchComplete>;
 	$checkExists(includes: string[], token: CancellationToken): Promise<boolean>;
 	$saveAll(includeUntitled?: boolean): Promise<boolean>;
@@ -860,9 +860,9 @@ export interface WorkspaceSymbolsDto extends IdObject {
 }
 
 export interface ResourceFileEditDto {
-	oldUri: UriComponents;
-	newUri: UriComponents;
-	options: IFileOperationOptions;
+	oldUri?: UriComponents;
+	newUri?: UriComponents;
+	options?: IFileOperationOptions;
 }
 
 export interface ResourceTextEditDto {
