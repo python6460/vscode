@@ -10,7 +10,7 @@ import { IEditorInput, EditorInput, IEditorIdentifier, ConfirmResult, IEditorCom
 import { QuickOpenEntryGroup } from 'vs/base/parts/quickopen/browser/quickOpenModel';
 import { EditorQuickOpenEntry, EditorQuickOpenEntryGroup, IEditorQuickOpenEntry, QuickOpenAction } from 'vs/workbench/browser/quickopen';
 import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
-import { IPartService } from 'vs/workbench/services/part/common/partService';
+import { IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
 import { IResourceInput } from 'vs/platform/editor/common/editor';
 import { IHistoryService } from 'vs/workbench/services/history/common/history';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
@@ -882,14 +882,14 @@ export class ResetGroupSizesAction extends Action {
 export class MaximizeGroupAction extends Action {
 
 	static readonly ID = 'workbench.action.maximizeEditor';
-	static readonly LABEL = nls.localize('maximizeEditor', "Maximize Editor Group and Hide Sidebar");
+	static readonly LABEL = nls.localize('maximizeEditor', "Maximize Editor Group and Hide Side Bar");
 
 	constructor(
 		id: string,
 		label: string,
 		@IEditorService private readonly editorService: IEditorService,
 		@IEditorGroupsService private readonly editorGroupService: IEditorGroupsService,
-		@IPartService private readonly partService: IPartService
+		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
 	) {
 		super(id, label);
 	}
@@ -897,7 +897,7 @@ export class MaximizeGroupAction extends Action {
 	run(): Promise<any> {
 		if (this.editorService.activeEditor) {
 			this.editorGroupService.arrangeGroups(GroupsArrangement.MINIMIZE_OTHERS);
-			this.partService.setSideBarHidden(true);
+			this.layoutService.setSideBarHidden(true);
 		}
 
 		return Promise.resolve(false);
