@@ -37,6 +37,7 @@ export class SearchService extends Disposable implements ISearchService {
 	private diskSearch: DiskSearch;
 	private readonly fileSearchProviders = new Map<string, ISearchResultProvider>();
 	private readonly textSearchProviders = new Map<string, ISearchResultProvider>();
+	private readonly fileIndexProviders = new Map<string, ISearchResultProvider>();
 
 	constructor(
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -58,6 +59,8 @@ export class SearchService extends Disposable implements ISearchService {
 			list = this.fileSearchProviders;
 		} else if (type === SearchProviderType.text) {
 			list = this.textSearchProviders;
+		} else if (type === SearchProviderType.fileIndex) {
+			list = this.fileIndexProviders;
 		} else {
 			throw new Error('Unknown SearchProviderType');
 		}
@@ -179,7 +182,7 @@ export class SearchService extends Disposable implements ISearchService {
 		keys(fqs).forEach(scheme => {
 			const schemeFQs = fqs.get(scheme);
 			const provider = query.type === QueryType.File ?
-				this.fileSearchProviders.get(scheme) :
+				this.fileSearchProviders.get(scheme) || this.fileIndexProviders.get(scheme) :
 				this.textSearchProviders.get(scheme);
 
 			if (!provider && scheme === 'file') {
@@ -418,6 +421,7 @@ export class SearchService extends Disposable implements ISearchService {
 	clearCache(cacheKey: string): Promise<void> {
 		const clearPs = [
 			this.diskSearch,
+			...values(this.fileIndexProviders),
 			...values(this.fileSearchProviders)
 		].map(provider => provider && provider.clearCache(cacheKey));
 

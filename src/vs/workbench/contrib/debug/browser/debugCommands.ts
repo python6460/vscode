@@ -70,11 +70,9 @@ export function registerCommands(): void {
 				const model = widget.getModel();
 				if (model) {
 					const position = widget.getPosition();
-					if (position) {
-						const bps = debugService.getModel().getBreakpoints({ uri: model.uri, lineNumber: position.lineNumber });
-						if (bps.length) {
-							debugService.enableOrDisableBreakpoints(!bps[0].enabled, bps[0]);
-						}
+					const bps = debugService.getModel().getBreakpoints({ uri: model.uri, lineNumber: position.lineNumber });
+					if (bps.length) {
+						debugService.enableOrDisableBreakpoints(!bps[0].enabled, bps[0]);
 					}
 				}
 			}
@@ -93,7 +91,7 @@ export function registerCommands(): void {
 			const focused = listService.lastFocusedList;
 
 			// Tree only
-			if (focused && !(focused instanceof List)) {
+			if (!(focused instanceof List)) {
 				const element = focused.getFocus();
 				if (element instanceof Expression) {
 					debugService.getViewModel().setSelectedExpression(element);
@@ -114,7 +112,7 @@ export function registerCommands(): void {
 			const focused = listService.lastFocusedList;
 
 			// Tree only
-			if (focused && !(focused instanceof List)) {
+			if (!(focused instanceof List)) {
 				const element = focused.getFocus();
 				if (element instanceof Variable) {
 					debugService.getViewModel().setSelectedExpression(element);
@@ -135,7 +133,7 @@ export function registerCommands(): void {
 			const focused = listService.lastFocusedList;
 
 			// Tree only
-			if (focused && !(focused instanceof List)) {
+			if (!(focused instanceof List)) {
 				const element = focused.getFocus();
 				if (element instanceof Expression) {
 					debugService.removeWatchExpressions(element.getId());
@@ -197,7 +195,7 @@ export function registerCommands(): void {
 			}
 			const launch = manager.getLaunches().filter(l => l.uri.toString() === launchUri).pop() || manager.selectedConfiguration.launch;
 
-			return launch!.openConfigFile(false, false).then(({ editor, created }) => {
+			return launch.openConfigFile(false, false).then(({ editor, created }) => {
 				if (editor && !created) {
 					const codeEditor = <ICodeEditor>editor.getControl();
 					if (codeEditor) {
@@ -216,10 +214,6 @@ export function registerCommands(): void {
 		const widget = editorService.activeTextEditorWidget;
 		if (isCodeEditor(widget)) {
 			const position = widget.getPosition();
-			if (!position || !widget.hasModel()) {
-				return undefined;
-			}
-
 			const modelUri = widget.getModel().uri;
 			const bp = debugService.getModel().getBreakpoints({ lineNumber: position.lineNumber, uri: modelUri })
 				.filter(bp => (bp.column === position.column || !bp.column && position.column <= 1)).pop();

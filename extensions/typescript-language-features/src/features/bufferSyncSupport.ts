@@ -108,26 +108,12 @@ class SyncedBuffer {
 			console.error(`Unexpected buffer state: ${this.state}`);
 		}
 
-		if (this.client.apiVersion.gte(API.v340)) {
-			const args: Proto.UpdateOpenRequestArgs = {
-				changedFiles: [{
-					fileName: this.filepath,
-					textChanges: events.map((change): Proto.CodeEdit => ({
-						newText: change.text,
-						start: typeConverters.Position.toLocation(change.range.start),
-						end: typeConverters.Position.toLocation(change.range.end),
-					})).reverse(), // Send the edits end of document to start of document order
-				}],
+		for (const { range, text } of events) {
+			const args: Proto.ChangeRequestArgs = {
+				insertString: text,
+				...typeConverters.Range.toFormattingRequestArgs(this.filepath, range)
 			};
-			this.client.executeWithoutWaitingForResponse('updateOpen', args);
-		} else {
-			for (const { range, text } of events) {
-				const args: Proto.ChangeRequestArgs = {
-					insertString: text,
-					...typeConverters.Range.toFormattingRequestArgs(this.filepath, range)
-				};
-				this.client.executeWithoutWaitingForResponse('change', args);
-			}
+			this.client.executeWithoutWaitingForResponse('change', args);
 		}
 	}
 }

@@ -12,7 +12,7 @@ import { Registry } from 'vs/platform/registry/common/platform';
 import { SyncActionDescriptor, MenuId, MenuRegistry } from 'vs/platform/actions/common/actions';
 import { IWorkbenchActionRegistry, Extensions as WorkbenchExtensions } from 'vs/workbench/common/actions';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
-import { IWorkbenchLayoutService, Parts, Position } from 'vs/workbench/services/layout/browser/layoutService';
+import { IPartService, Parts, Position } from 'vs/workbench/services/part/common/partService';
 import { ActivityAction } from 'vs/workbench/browser/parts/compositeBarActions';
 import { IActivity } from 'vs/workbench/common/activity';
 import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
@@ -25,13 +25,13 @@ export class ClosePanelAction extends Action {
 	constructor(
 		id: string,
 		name: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
 		super(id, name, 'hide-panel-action');
 	}
 
 	run(): Promise<any> {
-		this.layoutService.setPanelHidden(true);
+		this.partService.setPanelHidden(true);
 		return Promise.resolve();
 	}
 }
@@ -44,13 +44,13 @@ export class TogglePanelAction extends Action {
 	constructor(
 		id: string,
 		name: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
-		super(id, name, layoutService.isVisible(Parts.PANEL_PART) ? 'panel expanded' : 'panel');
+		super(id, name, partService.isVisible(Parts.PANEL_PART) ? 'panel expanded' : 'panel');
 	}
 
 	run(): Promise<any> {
-		this.layoutService.setPanelHidden(this.layoutService.isVisible(Parts.PANEL_PART));
+		this.partService.setPanelHidden(this.partService.isVisible(Parts.PANEL_PART));
 		return Promise.resolve();
 	}
 }
@@ -64,7 +64,7 @@ class FocusPanelAction extends Action {
 		id: string,
 		label: string,
 		@IPanelService private readonly panelService: IPanelService,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
 		super(id, label);
 	}
@@ -72,8 +72,8 @@ class FocusPanelAction extends Action {
 	run(): Promise<any> {
 
 		// Show panel
-		if (!this.layoutService.isVisible(Parts.PANEL_PART)) {
-			this.layoutService.setPanelHidden(false);
+		if (!this.partService.isVisible(Parts.PANEL_PART)) {
+			this.partService.setPanelHidden(false);
 			return Promise.resolve();
 		}
 
@@ -100,15 +100,15 @@ export class TogglePanelPositionAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IEditorGroupsService editorGroupsService: IEditorGroupsService
 	) {
-		super(id, label, layoutService.getPanelPosition() === Position.RIGHT ? 'move-panel-to-bottom' : 'move-panel-to-right');
+		super(id, label, partService.getPanelPosition() === Position.RIGHT ? 'move-panel-to-bottom' : 'move-panel-to-right');
 
 		this.toDispose = [];
 
 		const setClassAndLabel = () => {
-			const positionRight = this.layoutService.getPanelPosition() === Position.RIGHT;
+			const positionRight = this.partService.getPanelPosition() === Position.RIGHT;
 			this.class = positionRight ? 'move-panel-to-bottom' : 'move-panel-to-right';
 			this.label = positionRight ? TogglePanelPositionAction.MOVE_TO_BOTTOM_LABEL : TogglePanelPositionAction.MOVE_TO_RIGHT_LABEL;
 		};
@@ -119,9 +119,9 @@ export class TogglePanelPositionAction extends Action {
 	}
 
 	run(): Promise<any> {
-		const position = this.layoutService.getPanelPosition();
+		const position = this.partService.getPanelPosition();
 
-		this.layoutService.setPanelPosition(position === Position.BOTTOM ? Position.RIGHT : Position.BOTTOM);
+		this.partService.setPanelPosition(position === Position.BOTTOM ? Position.RIGHT : Position.BOTTOM);
 		return Promise.resolve();
 	}
 
@@ -145,26 +145,26 @@ export class ToggleMaximizedPanelAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IEditorGroupsService editorGroupsService: IEditorGroupsService
 	) {
-		super(id, label, layoutService.isPanelMaximized() ? 'minimize-panel-action' : 'maximize-panel-action');
+		super(id, label, partService.isPanelMaximized() ? 'minimize-panel-action' : 'maximize-panel-action');
 
 		this.toDispose = [];
 
 		this.toDispose.push(editorGroupsService.onDidLayout(() => {
-			const maximized = this.layoutService.isPanelMaximized();
+			const maximized = this.partService.isPanelMaximized();
 			this.class = maximized ? 'minimize-panel-action' : 'maximize-panel-action';
 			this.label = maximized ? ToggleMaximizedPanelAction.RESTORE_LABEL : ToggleMaximizedPanelAction.MAXIMIZE_LABEL;
 		}));
 	}
 
 	run(): Promise<any> {
-		if (!this.layoutService.isVisible(Parts.PANEL_PART)) {
-			this.layoutService.setPanelHidden(false);
+		if (!this.partService.isVisible(Parts.PANEL_PART)) {
+			this.partService.setPanelHidden(false);
 		}
 
-		this.layoutService.toggleMaximizedPanel();
+		this.partService.toggleMaximizedPanel();
 		return Promise.resolve();
 	}
 

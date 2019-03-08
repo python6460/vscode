@@ -64,14 +64,14 @@ export class IssueReporter extends Disposable {
 	private environmentService: IEnvironmentService;
 	private telemetryService: ITelemetryService;
 	private logService: ILogService;
-	private readonly issueReporterModel: IssueReporterModel;
+	private issueReporterModel: IssueReporterModel;
 	private numberOfSearchResultsDisplayed = 0;
 	private receivedSystemInfo = false;
 	private receivedPerformanceInfo = false;
 	private shouldQueueSearch = false;
 	private hasBeenSubmitted = false;
 
-	private readonly previewButton: Button;
+	private previewButton: Button;
 
 	constructor(configuration: IssueReporterConfiguration) {
 		super();

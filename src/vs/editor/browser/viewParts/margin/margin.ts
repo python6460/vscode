@@ -14,7 +14,7 @@ export class Margin extends ViewPart {
 	public static readonly CLASS_NAME = 'glyph-margin';
 	public static readonly OUTER_CLASS_NAME = 'margin';
 
-	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _domNode: FastDomNode<HTMLElement>;
 	private _canUseLayerHinting: boolean;
 	private _contentLeft: number;
 	private _glyphMarginLeft: number;
@@ -40,7 +40,7 @@ export class Margin extends ViewPart {
 	}
 
 	private _createDomNode(): FastDomNode<HTMLElement> {
-		const domNode = createFastDomNode(document.createElement('div'));
+		let domNode = createFastDomNode(document.createElement('div'));
 		domNode.setClassName(Margin.OUTER_CLASS_NAME);
 		domNode.setPosition('absolute');
 		domNode.setAttribute('role', 'presentation');
@@ -83,7 +83,7 @@ export class Margin extends ViewPart {
 		const adjustedScrollTop = ctx.scrollTop - ctx.bigNumbersDelta;
 		this._domNode.setTop(-adjustedScrollTop);
 
-		const height = Math.min(ctx.scrollHeight, 1000000);
+		let height = Math.min(ctx.scrollHeight, 1000000);
 		this._domNode.setHeight(height);
 		this._domNode.setWidth(this._contentLeft);
 

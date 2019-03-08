@@ -33,6 +33,10 @@ class MockMainThreadSearch implements MainThreadSearchShape {
 		this.lastHandle = handle;
 	}
 
+	$registerFileIndexProvider(handle: number, scheme: string): void {
+		this.lastHandle = handle;
+	}
+
 	$registerTextSearchProvider(handle: number, scheme: string): void {
 		this.lastHandle = handle;
 	}

@@ -6,6 +6,7 @@
 import * as nls from 'vs/nls';
 import * as dom from 'vs/base/browser/dom';
 import * as modes from 'vs/editor/common/modes';
+import { IKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { ActionsOrientation, ActionItem, ActionBar } from 'vs/base/browser/ui/actionbar/actionbar';
 import { Button } from 'vs/base/browser/ui/button/button';
 import { Action, IActionRunner } from 'vs/base/common/actions';
@@ -21,6 +22,8 @@ import { attachButtonStyler } from 'vs/platform/theme/common/styler';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { ICommentService } from 'vs/workbench/contrib/comments/electron-browser/commentService';
 import { SimpleCommentEditor } from 'vs/workbench/contrib/comments/electron-browser/simpleCommentEditor';
+import { KeyCode } from 'vs/base/common/keyCodes';
+import { isMacintosh } from 'vs/base/common/platform';
 import { Selection } from 'vs/editor/common/core/selection';
 import { IDialogService } from 'vs/platform/dialogs/common/dialogs';
 import { Emitter, Event } from 'vs/base/common/event';
@@ -33,8 +36,6 @@ import { DropdownMenuActionItem } from 'vs/base/browser/ui/dropdown/dropdown';
 import { AnchorAlignment } from 'vs/base/browser/ui/contextview/contextview';
 import { ToggleReactionsAction, ReactionAction, ReactionActionItem } from './reactionsAction';
 import { ICommandService } from 'vs/platform/commands/common/commands';
-import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
-import { ICommentThreadWidget } from 'vs/workbench/contrib/comments/common/commentThreadWidget';
 
 const UPDATE_COMMENT_LABEL = nls.localize('label.updateComment', "Update comment");
 const UPDATE_IN_PROGRESS_LABEL = nls.localize('label.updatingComment', "Updating comment...");
@@ -67,25 +68,21 @@ export class CommentNode extends Disposable {
 		return this._domNode;
 	}
 
-	public isEditing: boolean;
-
 	constructor(
 		private commentThread: modes.CommentThread | modes.CommentThread2,
 		public comment: modes.Comment,
 		private owner: string,
 		private resource: URI,
-		private parentEditor: ICodeEditor,
-		private parentThread: ICommentThreadWidget,
 		private markdownRenderer: MarkdownRenderer,
-		@IThemeService private themeService: IThemeService,
-		@IInstantiationService private instantiationService: IInstantiationService,
-		@ICommentService private commentService: ICommentService,
-		@ICommandService private commandService: ICommandService,
-		@IModelService private modelService: IModelService,
-		@IModeService private modeService: IModeService,
-		@IDialogService private dialogService: IDialogService,
-		@INotificationService private notificationService: INotificationService,
-		@IContextMenuService private contextMenuService: IContextMenuService
+		private themeService: IThemeService,
+		private instantiationService: IInstantiationService,
+		private commentService: ICommentService,
+		private commandService: ICommandService,
+		private modelService: IModelService,
+		private modeService: IModeService,
+		private dialogService: IDialogService,
+		private notificationService: INotificationService,
+		private contextMenuService: IContextMenuService
 	) {
 		super();
 
@@ -138,12 +135,12 @@ export class CommentNode extends Disposable {
 		}
 
 		if (this.comment.canEdit || this.comment.editCommand) {
-			this._editAction = this.createEditAction(commentDetailsContainer);
+			this._editAction = this.createEditAction(commentDetailsContainer, !!this.comment.editCommand);
 			actions.push(this._editAction);
 		}
 
 		if (this.comment.canDelete || this.comment.deleteCommand) {
-			this._deleteAction = this.createDeleteAction();
+			this._deleteAction = this.createDeleteAction(!!this.comment.deleteCommand);
 			actions.push(this._deleteAction);
 		}
 
@@ -299,7 +296,7 @@ export class CommentNode extends Disposable {
 
 	private createCommentEditor(): void {
 		const container = dom.append(this._commentEditContainer, dom.$('.edit-textarea'));
-		this._commentEditor = this.instantiationService.createInstance(SimpleCommentEditor, container, SimpleCommentEditor.getEditorOptions(), this.parentEditor, this.parentThread);
+		this._commentEditor = this.instantiationService.createInstance(SimpleCommentEditor, container, SimpleCommentEditor.getEditorOptions());
 		const resource = URI.parse(`comment:commentinput-${this.comment.commentId}-${Date.now()}.md`);
 		this._commentEditorModel = this.modelService.createModel('', this.modeService.createByFilepathOrFirstLine(resource.path), resource, false);
 
@@ -311,6 +308,13 @@ export class CommentNode extends Disposable {
 		const lastLine = this._commentEditorModel.getLineCount();
 		const lastColumn = this._commentEditorModel.getLineContent(lastLine).length + 1;
 		this._commentEditor.setSelection(new Selection(lastLine, lastColumn, lastLine, lastColumn));
+
+		this._commentEditorDisposables.push(this._commentEditor.onKeyDown((e: IKeyboardEvent) => {
+			const isCmdOrCtrl = isMacintosh ? e.metaKey : e.ctrlKey;
+			if (this._updateCommentButton.enabled && e.keyCode === KeyCode.Enter && isCmdOrCtrl) {
+				this.editComment(!!this.comment.editCommand);
+			}
+		}));
 
 		let commentThread = this.commentThread as modes.CommentThread2;
 		if (commentThread.commentThreadHandle) {
@@ -345,7 +349,6 @@ export class CommentNode extends Disposable {
 	}
 
 	private removeCommentEditor() {
-		this.isEditing = false;
 		this._editAction.enabled = true;
 		this._body.classList.remove('hidden');
 
@@ -360,22 +363,22 @@ export class CommentNode extends Disposable {
 		this._commentEditContainer.remove();
 	}
 
-	async editComment(): Promise<void> {
+	private async editComment(useCommand: boolean): Promise<void> {
 		this._updateCommentButton.enabled = false;
 		this._updateCommentButton.label = UPDATE_IN_PROGRESS_LABEL;
 
 		try {
 			const newBody = this._commentEditor.getValue();
 
-			if (this.comment.editCommand) {
+			if (useCommand) {
 				let commentThread = this.commentThread as modes.CommentThread2;
 				commentThread.input = {
 					uri: this._commentEditor.getModel().uri,
 					value: newBody
 				};
 				this.commentService.setActiveCommentThread(commentThread);
-				let commandId = this.comment.editCommand.id;
-				let args = this.comment.editCommand.arguments || [];
+				let commandId = this.comment.editCommand!.id;
+				let args = this.comment.editCommand!.arguments || [];
 
 				await this.commandService.executeCommand(commandId, ...args);
 			} else {
@@ -401,7 +404,7 @@ export class CommentNode extends Disposable {
 		}
 	}
 
-	private createDeleteAction(): Action {
+	private createDeleteAction(useCommand: boolean): Action {
 		return new Action('comment.delete', nls.localize('label.delete', "Delete"), 'octicon octicon-x', true, () => {
 			return this.dialogService.confirm({
 				message: nls.localize('confirmDelete', "Delete comment?"),
@@ -410,10 +413,10 @@ export class CommentNode extends Disposable {
 			}).then(async result => {
 				if (result.confirmed) {
 					try {
-						if (this.comment.deleteCommand) {
+						if (useCommand) {
 							this.commentService.setActiveCommentThread(this.commentThread as modes.CommentThread2);
-							let commandId = this.comment.deleteCommand.id;
-							let args = this.comment.deleteCommand.arguments || [];
+							let commandId = this.comment.deleteCommand!.id;
+							let args = this.comment.deleteCommand!.arguments || [];
 
 							await this.commandService.executeCommand(commandId, ...args);
 						} else {
@@ -435,9 +438,8 @@ export class CommentNode extends Disposable {
 		});
 	}
 
-	private createEditAction(commentDetailsContainer: HTMLElement): Action {
+	private createEditAction(commentDetailsContainer: HTMLElement, useCommand: boolean): Action {
 		return new Action('comment.edit', nls.localize('label.edit', "Edit"), 'octicon octicon-pencil', true, () => {
-			this.isEditing = true;
 			this._body.classList.add('hidden');
 			this._commentEditContainer = dom.append(commentDetailsContainer, dom.$('.edit-container'));
 			this.createCommentEditor();
@@ -458,7 +460,7 @@ export class CommentNode extends Disposable {
 			this._toDispose.push(attachButtonStyler(this._updateCommentButton, this.themeService));
 
 			this._toDispose.push(this._updateCommentButton.onDidClick(_ => {
-				this.editComment();
+				this.editComment(useCommand);
 			}));
 
 			this._commentEditorDisposables.push(this._commentEditor!.onDidChangeModelContent(_ => {
@@ -506,9 +508,7 @@ export class CommentNode extends Disposable {
 
 		this.comment = newComment;
 
-		if (newComment.label) {
-			this._isPendingLabel.innerText = newComment.label;
-		} else if (newComment.isDraft) {
+		if (newComment.isDraft) {
 			this._isPendingLabel.innerText = 'Pending';
 		} else {
 			this._isPendingLabel.innerText = '';

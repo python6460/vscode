@@ -48,7 +48,7 @@ export namespace EditorScroll_ {
 			return false;
 		}
 
-		const scrollArg: RawArguments = arg;
+		let scrollArg: RawArguments = arg;
 
 		if (!types.isString(scrollArg.to)) {
 			return false;
@@ -213,7 +213,7 @@ export namespace RevealLine_ {
 			return false;
 		}
 
-		const reveaLineArg: RawArguments = arg;
+		let reveaLineArg: RawArguments = arg;
 
 		if (!types.isNumber(reveaLineArg.lineNumber)) {
 			return false;
@@ -800,7 +800,7 @@ export namespace CoreNavigationCommands {
 			const lastAddedCursorIndex = cursors.getLastAddedCursorIndex();
 
 			const states = cursors.getAll();
-			const newStates: PartialCursorState[] = states.slice(0);
+			let newStates: PartialCursorState[] = states.slice(0);
 			newStates[lastAddedCursorIndex] = CursorMoveCommands.moveTo(context, states[lastAddedCursorIndex], true, args.position, args.viewPosition);
 
 			cursors.context.model.pushStackElement();
@@ -881,7 +881,7 @@ export namespace CoreNavigationCommands {
 		}
 
 		private _exec(context: CursorContext, cursors: CursorState[]): PartialCursorState[] {
-			const result: PartialCursorState[] = [];
+			let result: PartialCursorState[] = [];
 			for (let i = 0, len = cursors.length; i < len; i++) {
 				const cursor = cursors[i];
 				const lineNumber = cursor.modelState.position.lineNumber;
@@ -960,7 +960,7 @@ export namespace CoreNavigationCommands {
 		}
 
 		private _exec(context: CursorContext, cursors: CursorState[]): PartialCursorState[] {
-			const result: PartialCursorState[] = [];
+			let result: PartialCursorState[] = [];
 			for (let i = 0, len = cursors.length; i < len; i++) {
 				const cursor = cursors[i];
 				const lineNumber = cursor.modelState.position.lineNumber;
@@ -1280,8 +1280,8 @@ export namespace CoreNavigationCommands {
 			const lastAddedCursorIndex = cursors.getLastAddedCursorIndex();
 
 			const states = cursors.getAll();
-			const newStates: PartialCursorState[] = states.slice(0);
-			const lastAddedState = states[lastAddedCursorIndex];
+			let newStates: PartialCursorState[] = states.slice(0);
+			let lastAddedState = states[lastAddedCursorIndex];
 			newStates[lastAddedCursorIndex] = CursorMoveCommands.word(context, lastAddedState, lastAddedState.modelState.hasSelection(), args.position);
 
 			context.model.pushStackElement();
@@ -1338,7 +1338,7 @@ export namespace CoreNavigationCommands {
 			const lastAddedCursorIndex = cursors.getLastAddedCursorIndex();
 
 			const states = cursors.getAll();
-			const newStates: PartialCursorState[] = states.slice(0);
+			let newStates: PartialCursorState[] = states.slice(0);
 			newStates[lastAddedCursorIndex] = CursorMoveCommands.line(cursors.context, states[lastAddedCursorIndex], this._inSelectionMode, args.position, args.viewPosition);
 
 			cursors.context.model.pushStackElement();
@@ -1685,21 +1685,21 @@ class EditorOrNativeTextInputCommand extends Command {
 
 	public runCommand(accessor: ServicesAccessor, args: any): void {
 
-		const focusedEditor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
+		let focusedEditor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
 		// Only if editor text focus (i.e. not if editor has widget focus).
 		if (focusedEditor && focusedEditor.hasTextFocus()) {
 			return this._runEditorHandler(accessor, focusedEditor, args);
 		}
 
 		// Ignore this action when user is focused on an element that allows for entering text
-		const activeElement = <HTMLElement>document.activeElement;
+		let activeElement = <HTMLElement>document.activeElement;
 		if (activeElement && ['input', 'textarea'].indexOf(activeElement.tagName.toLowerCase()) >= 0) {
 			document.execCommand(this._inputHandler);
 			return;
 		}
 
 		// Redirecting to active editor
-		const activeEditor = accessor.get(ICodeEditorService).getActiveCodeEditor();
+		let activeEditor = accessor.get(ICodeEditorService).getActiveCodeEditor();
 		if (activeEditor) {
 			activeEditor.focus();
 			return this._runEditorHandler(accessor, activeEditor, args);
@@ -1707,7 +1707,7 @@ class EditorOrNativeTextInputCommand extends Command {
 	}
 
 	private _runEditorHandler(accessor: ServicesAccessor, editor: ICodeEditor, args: any): void {
-		const HANDLER = this._editorHandler;
+		let HANDLER = this._editorHandler;
 		if (typeof HANDLER === 'string') {
 			editor.trigger('keyboard', HANDLER, args);
 		} else {

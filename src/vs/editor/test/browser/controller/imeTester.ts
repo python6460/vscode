@@ -44,7 +44,7 @@ class SingleLineTestModel implements ISimpleModel {
 
 class TestView {
 
-	private readonly _model: SingleLineTestModel;
+	private _model: SingleLineTestModel;
 
 	constructor(model: SingleLineTestModel) {
 		this._model = model;

@@ -27,9 +27,9 @@ export abstract class DedupOverlay extends DynamicViewOverlay {
 
 	protected _render(visibleStartLineNumber: number, visibleEndLineNumber: number, decorations: DecorationToRender[]): string[][] {
 
-		const output: string[][] = [];
+		let output: string[][] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber++) {
-			const lineIndex = lineNumber - visibleStartLineNumber;
+			let lineIndex = lineNumber - visibleStartLineNumber;
 			output[lineIndex] = [];
 		}
 
@@ -50,10 +50,10 @@ export abstract class DedupOverlay extends DynamicViewOverlay {
 		let prevClassName: string | null = null;
 		let prevEndLineIndex = 0;
 		for (let i = 0, len = decorations.length; i < len; i++) {
-			const d = decorations[i];
-			const className = d.className;
+			let d = decorations[i];
+			let className = d.className;
 			let startLineIndex = Math.max(d.startLineNumber, visibleStartLineNumber) - visibleStartLineNumber;
-			const endLineIndex = Math.min(d.endLineNumber, visibleEndLineNumber) - visibleStartLineNumber;
+			let endLineIndex = Math.min(d.endLineNumber, visibleEndLineNumber) - visibleStartLineNumber;
 
 			if (prevClassName === className) {
 				startLineIndex = Math.max(prevEndLineIndex + 1, startLineIndex);
@@ -74,7 +74,7 @@ export abstract class DedupOverlay extends DynamicViewOverlay {
 
 export class GlyphMarginOverlay extends DedupOverlay {
 
-	private readonly _context: ViewContext;
+	private _context: ViewContext;
 	private _lineHeight: number;
 	private _glyphMargin: boolean;
 	private _glyphMarginLeft: number;
@@ -138,11 +138,11 @@ export class GlyphMarginOverlay extends DedupOverlay {
 	// --- end event handlers
 
 	protected _getDecorations(ctx: RenderingContext): DecorationToRender[] {
-		const decorations = ctx.getDecorationsInViewport();
+		let decorations = ctx.getDecorationsInViewport();
 		let r: DecorationToRender[] = [], rLen = 0;
 		for (let i = 0, len = decorations.length; i < len; i++) {
-			const d = decorations[i];
-			const glyphMarginClassName = d.options.glyphMarginClassName;
+			let d = decorations[i];
+			let glyphMarginClassName = d.options.glyphMarginClassName;
 			if (glyphMarginClassName) {
 				r[rLen++] = new DecorationToRender(d.range.startLineNumber, d.range.endLineNumber, glyphMarginClassName);
 			}
@@ -156,19 +156,19 @@ export class GlyphMarginOverlay extends DedupOverlay {
 			return;
 		}
 
-		const visibleStartLineNumber = ctx.visibleRange.startLineNumber;
-		const visibleEndLineNumber = ctx.visibleRange.endLineNumber;
-		const toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
+		let visibleStartLineNumber = ctx.visibleRange.startLineNumber;
+		let visibleEndLineNumber = ctx.visibleRange.endLineNumber;
+		let toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
 
-		const lineHeight = this._lineHeight.toString();
-		const left = this._glyphMarginLeft.toString();
-		const width = this._glyphMarginWidth.toString();
-		const common = '" style="left:' + left + 'px;width:' + width + 'px' + ';height:' + lineHeight + 'px;"></div>';
+		let lineHeight = this._lineHeight.toString();
+		let left = this._glyphMarginLeft.toString();
+		let width = this._glyphMarginWidth.toString();
+		let common = '" style="left:' + left + 'px;width:' + width + 'px' + ';height:' + lineHeight + 'px;"></div>';
 
-		const output: string[] = [];
+		let output: string[] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber++) {
-			const lineIndex = lineNumber - visibleStartLineNumber;
-			const classNames = toRender[lineIndex];
+			let lineIndex = lineNumber - visibleStartLineNumber;
+			let classNames = toRender[lineIndex];
 
 			if (classNames.length === 0) {
 				output[lineIndex] = '';
@@ -188,7 +188,7 @@ export class GlyphMarginOverlay extends DedupOverlay {
 		if (!this._renderResult) {
 			return '';
 		}
-		const lineIndex = lineNumber - startLineNumber;
+		let lineIndex = lineNumber - startLineNumber;
 		if (lineIndex < 0 || lineIndex >= this._renderResult.length) {
 			return '';
 		}

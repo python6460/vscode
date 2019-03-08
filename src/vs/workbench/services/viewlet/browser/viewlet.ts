@@ -45,17 +45,7 @@ export interface IViewletService {
 	getViewlets(): ViewletDescriptor[];
 
 	/**
-	 * Returns the progress indicator for the side bar.
+	 *
 	 */
 	getProgressIndicator(id: string): IProgressService | null;
-
-	/**
-	 * Hide the active viewlet.
-	 */
-	hideActiveViewlet(): void;
-
-	/**
-	 * Return the last active viewlet id.
-	 */
-	getLastActiveViewletId(): string;
 }

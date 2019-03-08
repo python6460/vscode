@@ -27,8 +27,8 @@ export interface IReverseSingleEditOperation extends IIdentifiedSingleEditOperat
 }
 
 export class PieceTreeTextBuffer implements ITextBuffer {
-	private readonly _pieceTree: PieceTreeBase;
-	private readonly _BOM: string;
+	private _pieceTree: PieceTreeBase;
+	private _BOM: string;
 	private _mightContainRTL: boolean;
 	private _mightContainNonBasicASCII: boolean;
 

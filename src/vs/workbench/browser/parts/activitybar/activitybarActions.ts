@@ -23,8 +23,8 @@ import { ViewletDescriptor } from 'vs/workbench/browser/viewlet';
 import { Extensions as ActionExtensions, IWorkbenchActionRegistry } from 'vs/workbench/common/actions';
 import { IActivity, IGlobalActivity } from 'vs/workbench/common/activity';
 import { ACTIVITY_BAR_FOREGROUND } from 'vs/workbench/common/theme';
-import { IActivityBarService } from 'vs/workbench/services/activityBar/browser/activityBarService';
-import { IWorkbenchLayoutService, Parts } from 'vs/workbench/services/layout/browser/layoutService';
+import { IActivityService } from 'vs/workbench/services/activity/common/activity';
+import { IPartService, Parts } from 'vs/workbench/services/part/common/partService';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 
 export class ViewletActivityAction extends ActivityAction {
@@ -36,7 +36,7 @@ export class ViewletActivityAction extends ActivityAction {
 	constructor(
 		activity: IActivity,
 		@IViewletService private readonly viewletService: IViewletService,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService
 	) {
 		super(activity);
@@ -54,13 +54,13 @@ export class ViewletActivityAction extends ActivityAction {
 		}
 		this.lastRun = now;
 
-		const sideBarVisible = this.layoutService.isVisible(Parts.SIDEBAR_PART);
+		const sideBarVisible = this.partService.isVisible(Parts.SIDEBAR_PART);
 		const activeViewlet = this.viewletService.getActiveViewlet();
 
 		// Hide sidebar if selected viewlet already visible
 		if (sideBarVisible && activeViewlet && activeViewlet.getId() === this.activity.id) {
 			this.logAction('hide');
-			this.layoutService.setSideBarHidden(true);
+			this.partService.setSideBarHidden(true);
 			return Promise.resolve();
 		}
 
@@ -83,19 +83,19 @@ export class ToggleViewletAction extends Action {
 
 	constructor(
 		private _viewlet: ViewletDescriptor,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IViewletService private readonly viewletService: IViewletService
 	) {
 		super(_viewlet.id, _viewlet.name);
 	}
 
 	run(): Promise<any> {
-		const sideBarVisible = this.layoutService.isVisible(Parts.SIDEBAR_PART);
+		const sideBarVisible = this.partService.isVisible(Parts.SIDEBAR_PART);
 		const activeViewlet = this.viewletService.getActiveViewlet();
 
 		// Hide sidebar if selected viewlet already visible
 		if (sideBarVisible && activeViewlet && activeViewlet.getId() === this._viewlet.id) {
-			this.layoutService.setSideBarHidden(true);
+			this.partService.setSideBarHidden(true);
 			return Promise.resolve();
 		}
 
@@ -166,10 +166,10 @@ export class PlaceHolderViewletActivityAction extends ViewletActivityAction {
 	constructor(
 		id: string, iconUrl: URI,
 		@IViewletService viewletService: IViewletService,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@IPartService partService: IPartService,
 		@ITelemetryService telemetryService: ITelemetryService
 	) {
-		super({ id, name: id, cssClass: `extensionViewlet-placeholder-${id.replace(/\./g, '-')}` }, viewletService, layoutService, telemetryService);
+		super({ id, name: id, cssClass: `extensionViewlet-placeholder-${id.replace(/\./g, '-')}` }, viewletService, partService, telemetryService);
 
 		const iconClass = `.monaco-workbench .activitybar .monaco-action-bar .action-label.${this.class}`; // Generate Placeholder CSS to show the icon in the activity bar
 		DOM.createCSSRule(iconClass, `-webkit-mask: url('${iconUrl || ''}') no-repeat 50% 50%`);
@@ -197,13 +197,13 @@ class SwitchSideBarViewAction extends Action {
 		id: string,
 		name: string,
 		@IViewletService private readonly viewletService: IViewletService,
-		@IActivityBarService private readonly activityBarService: IActivityBarService
+		@IActivityService private readonly activityService: IActivityService
 	) {
 		super(id, name);
 	}
 
 	run(offset: number): Promise<any> {
-		const pinnedViewletIds = this.activityBarService.getPinnedViewletIds();
+		const pinnedViewletIds = this.activityService.getPinnedViewletIds();
 
 		const activeViewlet = this.viewletService.getActiveViewlet();
 		if (!activeViewlet) {
@@ -229,9 +229,9 @@ export class PreviousSideBarViewAction extends SwitchSideBarViewAction {
 		id: string,
 		name: string,
 		@IViewletService viewletService: IViewletService,
-		@IActivityBarService activityBarService: IActivityBarService
+		@IActivityService activityService: IActivityService
 	) {
-		super(id, name, viewletService, activityBarService);
+		super(id, name, viewletService, activityService);
 	}
 
 	run(): Promise<any> {
@@ -248,9 +248,9 @@ export class NextSideBarViewAction extends SwitchSideBarViewAction {
 		id: string,
 		name: string,
 		@IViewletService viewletService: IViewletService,
-		@IActivityBarService activityBarService: IActivityBarService
+		@IActivityService activityService: IActivityService
 	) {
-		super(id, name, viewletService, activityBarService);
+		super(id, name, viewletService, activityService);
 	}
 
 	run(): Promise<any> {

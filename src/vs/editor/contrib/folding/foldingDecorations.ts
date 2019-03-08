@@ -28,7 +28,7 @@ export class FoldingDecorationProvider implements IDecorationProvider {
 
 	public autoHideFoldingControls: boolean = true;
 
-	constructor(private readonly editor: ICodeEditor) {
+	constructor(private editor: ICodeEditor) {
 	}
 
 	getDecorationOption(isCollapsed: boolean): ModelDecorationOptions {

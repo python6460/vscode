@@ -11,7 +11,7 @@ import * as viewEvents from 'vs/editor/common/view/viewEvents';
 
 export class LinesDecorationsOverlay extends DedupOverlay {
 
-	private readonly _context: ViewContext;
+	private _context: ViewContext;
 
 	private _decorationsLeft: number;
 	private _decorationsWidth: number;
@@ -66,11 +66,11 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 	// --- end event handlers
 
 	protected _getDecorations(ctx: RenderingContext): DecorationToRender[] {
-		const decorations = ctx.getDecorationsInViewport();
+		let decorations = ctx.getDecorationsInViewport();
 		let r: DecorationToRender[] = [], rLen = 0;
 		for (let i = 0, len = decorations.length; i < len; i++) {
-			const d = decorations[i];
-			const linesDecorationsClassName = d.options.linesDecorationsClassName;
+			let d = decorations[i];
+			let linesDecorationsClassName = d.options.linesDecorationsClassName;
 			if (linesDecorationsClassName) {
 				r[rLen++] = new DecorationToRender(d.range.startLineNumber, d.range.endLineNumber, linesDecorationsClassName);
 			}
@@ -79,18 +79,18 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 	}
 
 	public prepareRender(ctx: RenderingContext): void {
-		const visibleStartLineNumber = ctx.visibleRange.startLineNumber;
-		const visibleEndLineNumber = ctx.visibleRange.endLineNumber;
-		const toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
+		let visibleStartLineNumber = ctx.visibleRange.startLineNumber;
+		let visibleEndLineNumber = ctx.visibleRange.endLineNumber;
+		let toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
 
-		const left = this._decorationsLeft.toString();
-		const width = this._decorationsWidth.toString();
-		const common = '" style="left:' + left + 'px;width:' + width + 'px;"></div>';
+		let left = this._decorationsLeft.toString();
+		let width = this._decorationsWidth.toString();
+		let common = '" style="left:' + left + 'px;width:' + width + 'px;"></div>';
 
-		const output: string[] = [];
+		let output: string[] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber++) {
-			const lineIndex = lineNumber - visibleStartLineNumber;
-			const classNames = toRender[lineIndex];
+			let lineIndex = lineNumber - visibleStartLineNumber;
+			let classNames = toRender[lineIndex];
 			let lineOutput = '';
 			for (let i = 0, len = classNames.length; i < len; i++) {
 				lineOutput += '<div class="cldr ' + classNames[i] + common;

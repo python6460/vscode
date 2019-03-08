@@ -32,7 +32,7 @@ type ExecCommand = 'cut' | 'copy' | 'paste';
 
 abstract class ExecCommandAction extends EditorAction {
 
-	private readonly browserCommand: ExecCommand;
+	private browserCommand: ExecCommand;
 
 	constructor(browserCommand: ExecCommand, opts: IActionOptions) {
 		super(opts);

@@ -90,7 +90,7 @@ export default class LanguageProvider extends Disposable {
 		}
 
 		const base = basename(resource.fsPath);
-		return !!base && (!!this.description.configFilePattern && this.description.configFilePattern.test(base));
+		return !!base && base === this.description.configFile;
 	}
 
 	private get id(): string {

@@ -11,14 +11,14 @@ export class ViewModel implements IViewModel {
 
 	firstSessionStart = true;
 
-	private _focusedStackFrame: IStackFrame | undefined;
-	private _focusedSession: IDebugSession | undefined;
-	private _focusedThread: IThread | undefined;
-	private selectedExpression: IExpression | undefined;
-	private selectedFunctionBreakpoint: IFunctionBreakpoint | undefined;
+	private _focusedStackFrame: IStackFrame;
+	private _focusedSession: IDebugSession;
+	private _focusedThread: IThread;
+	private selectedExpression: IExpression;
+	private selectedFunctionBreakpoint: IFunctionBreakpoint;
 	private readonly _onDidFocusSession: Emitter<IDebugSession | undefined>;
-	private readonly _onDidFocusStackFrame: Emitter<{ stackFrame: IStackFrame | undefined, explicit: boolean }>;
-	private readonly _onDidSelectExpression: Emitter<IExpression | undefined>;
+	private readonly _onDidFocusStackFrame: Emitter<{ stackFrame: IStackFrame, explicit: boolean }>;
+	private readonly _onDidSelectExpression: Emitter<IExpression>;
 	private multiSessionView: boolean;
 	private expressionSelectedContextKey: IContextKey<boolean>;
 	private breakpointSelectedContextKey: IContextKey<boolean>;
@@ -38,19 +38,19 @@ export class ViewModel implements IViewModel {
 		return 'root';
 	}
 
-	get focusedSession(): IDebugSession | undefined {
+	get focusedSession(): IDebugSession {
 		return this._focusedSession;
 	}
 
-	get focusedThread(): IThread | undefined {
+	get focusedThread(): IThread {
 		return this._focusedThread;
 	}
 
-	get focusedStackFrame(): IStackFrame | undefined {
+	get focusedStackFrame(): IStackFrame {
 		return this._focusedStackFrame;
 	}
 
-	setFocus(stackFrame: IStackFrame | undefined, thread: IThread | undefined, session: IDebugSession | undefined, explicit: boolean): void {
+	setFocus(stackFrame: IStackFrame, thread: IThread, session: IDebugSession, explicit: boolean): void {
 		const shouldEmitForStackFrame = this._focusedStackFrame !== stackFrame;
 		const shouldEmitForSession = this._focusedSession !== session;
 
@@ -72,29 +72,29 @@ export class ViewModel implements IViewModel {
 		return this._onDidFocusSession.event;
 	}
 
-	get onDidFocusStackFrame(): Event<{ stackFrame: IStackFrame | undefined, explicit: boolean }> {
+	get onDidFocusStackFrame(): Event<{ stackFrame: IStackFrame, explicit: boolean }> {
 		return this._onDidFocusStackFrame.event;
 	}
 
-	getSelectedExpression(): IExpression | undefined {
+	getSelectedExpression(): IExpression {
 		return this.selectedExpression;
 	}
 
-	setSelectedExpression(expression: IExpression | undefined) {
+	setSelectedExpression(expression: IExpression) {
 		this.selectedExpression = expression;
 		this.expressionSelectedContextKey.set(!!expression);
 		this._onDidSelectExpression.fire(expression);
 	}
 
-	get onDidSelectExpression(): Event<IExpression | undefined> {
+	get onDidSelectExpression(): Event<IExpression> {
 		return this._onDidSelectExpression.event;
 	}
 
-	getSelectedFunctionBreakpoint(): IFunctionBreakpoint | undefined {
+	getSelectedFunctionBreakpoint(): IFunctionBreakpoint {
 		return this.selectedFunctionBreakpoint;
 	}
 
-	setSelectedFunctionBreakpoint(functionBreakpoint: IFunctionBreakpoint | undefined): void {
+	setSelectedFunctionBreakpoint(functionBreakpoint: IFunctionBreakpoint): void {
 		this.selectedFunctionBreakpoint = functionBreakpoint;
 		this.breakpointSelectedContextKey.set(!!functionBreakpoint);
 	}

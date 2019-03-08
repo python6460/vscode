@@ -12,10 +12,10 @@ import { ITextModel } from 'vs/editor/common/model';
 
 export class DragAndDropCommand implements editorCommon.ICommand {
 
-	private readonly selection: Selection;
-	private readonly targetPosition: Position;
+	private selection: Selection;
+	private targetPosition: Position;
 	private targetSelection: Selection;
-	private readonly copy: boolean;
+	private copy: boolean;
 
 	constructor(selection: Selection, targetPosition: Position, copy: boolean) {
 		this.selection = selection;

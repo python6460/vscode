@@ -233,26 +233,26 @@ export class PagedScreenReaderStrategy {
 	}
 
 	private static _getRangeForPage(page: number): Range {
-		const offset = page * PagedScreenReaderStrategy._LINES_PER_PAGE;
-		const startLineNumber = offset + 1;
-		const endLineNumber = offset + PagedScreenReaderStrategy._LINES_PER_PAGE;
+		let offset = page * PagedScreenReaderStrategy._LINES_PER_PAGE;
+		let startLineNumber = offset + 1;
+		let endLineNumber = offset + PagedScreenReaderStrategy._LINES_PER_PAGE;
 		return new Range(startLineNumber, 1, endLineNumber + 1, 1);
 	}
 
 	public static fromEditorSelection(previousState: TextAreaState, model: ISimpleModel, selection: Range, trimLongText: boolean): TextAreaState {
 
-		const selectionStartPage = PagedScreenReaderStrategy._getPageOfLine(selection.startLineNumber);
-		const selectionStartPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionStartPage);
+		let selectionStartPage = PagedScreenReaderStrategy._getPageOfLine(selection.startLineNumber);
+		let selectionStartPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionStartPage);
 
-		const selectionEndPage = PagedScreenReaderStrategy._getPageOfLine(selection.endLineNumber);
-		const selectionEndPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionEndPage);
+		let selectionEndPage = PagedScreenReaderStrategy._getPageOfLine(selection.endLineNumber);
+		let selectionEndPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionEndPage);
 
-		const pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
+		let pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
 		let pretext = model.getValueInRange(pretextRange, EndOfLinePreference.LF);
 
-		const lastLine = model.getLineCount();
-		const lastLineMaxColumn = model.getLineMaxColumn(lastLine);
-		const posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, lastLineMaxColumn))!;
+		let lastLine = model.getLineCount();
+		let lastLineMaxColumn = model.getLineMaxColumn(lastLine);
+		let posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, lastLineMaxColumn))!;
 		let posttext = model.getValueInRange(posttextRange, EndOfLinePreference.LF);
 
 
@@ -261,8 +261,8 @@ export class PagedScreenReaderStrategy {
 			// take full selection
 			text = model.getValueInRange(selection, EndOfLinePreference.LF);
 		} else {
-			const selectionRange1 = selectionStartPageRange.intersectRanges(selection)!;
-			const selectionRange2 = selectionEndPageRange.intersectRanges(selection)!;
+			let selectionRange1 = selectionStartPageRange.intersectRanges(selection)!;
+			let selectionRange2 = selectionEndPageRange.intersectRanges(selection)!;
 			text = (
 				model.getValueInRange(selectionRange1, EndOfLinePreference.LF)
 				+ String.fromCharCode(8230)

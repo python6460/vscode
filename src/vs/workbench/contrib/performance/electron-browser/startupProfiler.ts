@@ -16,7 +16,6 @@ import { IWorkbenchContribution } from 'vs/workbench/common/contributions';
 import { PerfviewInput } from 'vs/workbench/contrib/performance/electron-browser/perfviewEditor';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
 import { IClipboardService } from 'vs/platform/clipboard/common/clipboardService';
-import { URI } from 'vs/base/common/uri';
 
 export class StartupProfiler implements IWorkbenchContribution {
 
@@ -79,7 +78,7 @@ export class StartupProfiler implements IWorkbenchContribution {
 			}).then(res => {
 				if (res.confirmed) {
 					Promise.all<any>([
-						this._windowsService.showItemInFolder(URI.file(join(dir, files[0]))),
+						this._windowsService.showItemInFolder(join(dir, files[0])),
 						this._createPerfIssue(files)
 					]).then(() => {
 						// keep window stable until restart is selected

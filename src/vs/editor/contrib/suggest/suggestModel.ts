@@ -8,14 +8,15 @@ import { TimeoutTimer } from 'vs/base/common/async';
 import { onUnexpectedError } from 'vs/base/common/errors';
 import { Emitter, Event } from 'vs/base/common/event';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
+import { values } from 'vs/base/common/map';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { CursorChangeReason, ICursorSelectionChangedEvent } from 'vs/editor/common/controller/cursorEvents';
 import { Position } from 'vs/editor/common/core/position';
 import { Selection } from 'vs/editor/common/core/selection';
 import { ITextModel, IWordAtPosition } from 'vs/editor/common/model';
-import { CompletionItemProvider, StandardTokenType, CompletionContext, CompletionProviderRegistry, CompletionTriggerKind, CompletionItemKind, completionKindFromString } from 'vs/editor/common/modes';
+import { CompletionItemProvider, StandardTokenType, CompletionContext, CompletionProviderRegistry, CompletionTriggerKind } from 'vs/editor/common/modes';
 import { CompletionModel } from './completionModel';
-import { CompletionItem, getSuggestionComparator, provideSuggestionItems, getSnippetSuggestSupport, SnippetSortOrder, CompletionOptions } from './suggest';
+import { CompletionItem, getSuggestionComparator, provideSuggestionItems, getSnippetSuggestSupport } from './suggest';
 import { SnippetController2 } from 'vs/editor/contrib/snippet/snippetController2';
 import { CancellationTokenSource } from 'vs/base/common/cancellation';
 import { IEditorWorkerService } from 'vs/editor/common/services/editorWorkerService';
@@ -208,7 +209,7 @@ export class SuggestModel implements IDisposable {
 				// keep existing items that where not computed by the
 				// supports/providers that want to trigger now
 				const items: CompletionItem[] | undefined = this._completionModel ? this._completionModel.adopt(supports) : undefined;
-				this.trigger({ auto: true, shy: false, triggerCharacter: lastChar }, Boolean(this._completionModel), supports, items);
+				this.trigger({ auto: true, shy: false, triggerCharacter: lastChar }, Boolean(this._completionModel), values(supports), items);
 			}
 		});
 	}
@@ -346,7 +347,7 @@ export class SuggestModel implements IDisposable {
 		}, 25);
 	}
 
-	trigger(context: SuggestTriggerContext, retrigger: boolean = false, onlyFrom?: Set<CompletionItemProvider>, existingItems?: CompletionItem[]): void {
+	trigger(context: SuggestTriggerContext, retrigger: boolean = false, onlyFrom?: CompletionItemProvider[], existingItems?: CompletionItem[]): void {
 		if (!this._editor.hasModel()) {
 			return;
 		}
@@ -370,7 +371,7 @@ export class SuggestModel implements IDisposable {
 				triggerKind: CompletionTriggerKind.TriggerCharacter,
 				triggerCharacter: context.triggerCharacter
 			};
-		} else if (onlyFrom && onlyFrom.size > 0) {
+		} else if (onlyFrom && onlyFrom.length) {
 			suggestCtx = { triggerKind: CompletionTriggerKind.TriggerForIncompleteCompletions };
 		} else {
 			suggestCtx = { triggerKind: CompletionTriggerKind.Invoke };
@@ -378,40 +379,13 @@ export class SuggestModel implements IDisposable {
 
 		this._requestToken = new CancellationTokenSource();
 
-		// kind filter and snippet sort rules
-		const { contribInfo } = this._editor.getConfiguration();
-		let itemKindFilter = new Set<CompletionItemKind>();
-		let snippetSortOrder = SnippetSortOrder.Inline;
-		switch (contribInfo.suggest.snippets) {
-			case 'top':
-				snippetSortOrder = SnippetSortOrder.Top;
-				break;
-			// 	↓ that's the default anyways...
-			// case 'inline':
-			// 	snippetSortOrder = SnippetSortOrder.Inline;
-			// 	break;
-			case 'bottom':
-				snippetSortOrder = SnippetSortOrder.Bottom;
-				break;
-			case 'none':
-				itemKindFilter.add(CompletionItemKind.Snippet);
-				break;
-		}
-
-		// kind filter
-		for (const key in contribInfo.suggest.filteredTypes) {
-			const kind = completionKindFromString(key, true);
-			if (typeof kind !== 'undefined' && contribInfo.suggest.filteredTypes[key] === false) {
-				itemKindFilter.add(kind);
-			}
-		}
-
 		let wordDistance = WordDistance.create(this._editorWorker, this._editor);
 
 		let items = provideSuggestionItems(
 			model,
 			this._editor.getPosition(),
-			new CompletionOptions(snippetSortOrder, itemKindFilter, onlyFrom),
+			this._editor.getConfiguration().contribInfo.suggest.snippets,
+			onlyFrom,
 			suggestCtx,
 			this._requestToken.token
 		);
@@ -431,7 +405,7 @@ export class SuggestModel implements IDisposable {
 			const model = this._editor.getModel();
 
 			if (isNonEmptyArray(existingItems)) {
-				const cmpFn = getSuggestionComparator(snippetSortOrder);
+				const cmpFn = getSuggestionComparator(this._editor.getConfiguration().contribInfo.suggest.snippets);
 				items = items.concat(existingItems).sort(cmpFn);
 			}
 
@@ -487,7 +461,7 @@ export class SuggestModel implements IDisposable {
 			// typed -> moved cursor RIGHT & incomple model & still on a word -> retrigger
 			const { incomplete } = this._completionModel;
 			const adopted = this._completionModel.adopt(incomplete);
-			this.trigger({ auto: this._state === State.Auto, shy: false }, true, incomplete, adopted);
+			this.trigger({ auto: this._state === State.Auto, shy: false }, true, values(incomplete), adopted);
 
 		} else {
 			// typed -> moved cursor RIGHT -> update UI

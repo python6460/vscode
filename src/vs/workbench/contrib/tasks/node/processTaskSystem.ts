@@ -102,10 +102,6 @@ export class ProcessTaskSystem implements ITaskSystem {
 		return true;
 	}
 
-	public customExecutionComplete(task: Task, result?: number): Promise<void> {
-		throw new TaskError(Severity.Error, 'Custom execution task completion is never expected in the process task system.', TaskErrors.UnknownError);
-	}
-
 	public hasErrors(value: boolean): void {
 		this.errorsShown = !value;
 	}
@@ -280,7 +276,7 @@ export class ProcessTaskSystem implements ITaskSystem {
 				this.childProcessEnded();
 				watchingProblemMatcher.done();
 				watchingProblemMatcher.dispose();
-				if (processStartedSignaled && task.command.runtime !== RuntimeType.CustomExecution) {
+				if (processStartedSignaled) {
 					this._onDidStateChange.fire(TaskEvent.create(TaskEventKind.ProcessEnded, task, success.cmdCode!));
 				}
 				toDispose = dispose(toDispose!);
@@ -336,7 +332,7 @@ export class ProcessTaskSystem implements ITaskSystem {
 				startStopProblemMatcher.done();
 				startStopProblemMatcher.dispose();
 				this.checkTerminated(task, success);
-				if (processStartedSignaled && task.command.runtime !== RuntimeType.CustomExecution) {
+				if (processStartedSignaled) {
 					this._onDidStateChange.fire(TaskEvent.create(TaskEventKind.ProcessEnded, task, success.cmdCode!));
 				}
 				this._onDidStateChange.fire(inactiveEvent);

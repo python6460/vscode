@@ -51,6 +51,8 @@ export class LocalizationsService extends Disposable implements ILocalizationsSe
 
 		this._register(extensionManagementService.onDidInstallExtension(({ local }) => this.onDidInstallExtension(local)));
 		this._register(extensionManagementService.onDidUninstallExtension(({ identifier }) => this.onDidUninstallExtension(identifier)));
+
+		this.extensionManagementService.getInstalled().then(installed => this.cache.update(installed));
 	}
 
 	getLanguageIds(type: LanguageType): Promise<string[]> {
@@ -67,7 +69,7 @@ export class LocalizationsService extends Disposable implements ILocalizationsSe
 	private onDidInstallExtension(extension: ILocalExtension | undefined): void {
 		if (extension && extension.manifest && extension.manifest.contributes && extension.manifest.contributes.localizations && extension.manifest.contributes.localizations.length) {
 			this.logService.debug('Adding language packs from the extension', extension.identifier.id);
-			this.update().then(changed => { if (changed) { this._onDidLanguagesChange.fire(); } });
+			this.update();
 		}
 	}
 
@@ -76,15 +78,19 @@ export class LocalizationsService extends Disposable implements ILocalizationsSe
 			.then(languagePacks => {
 				if (Object.keys(languagePacks).some(language => languagePacks[language] && languagePacks[language].extensions.some(e => areSameExtensions(e.extensionIdentifier, identifier)))) {
 					this.logService.debug('Removing language packs from the extension', identifier.id);
-					this.update().then(changed => { if (changed) { this._onDidLanguagesChange.fire(); } });
+					this.update();
 				}
 			});
 	}
 
-	update(): Promise<boolean> {
-		return Promise.all([this.cache.getLanguagePacks(), this.extensionManagementService.getInstalled()])
+	private update(): void {
+		Promise.all([this.cache.getLanguagePacks(), this.extensionManagementService.getInstalled()])
 			.then(([current, installed]) => this.cache.update(installed)
-				.then(updated => !equals(Object.keys(current), Object.keys(updated))));
+				.then(updated => {
+					if (!equals(Object.keys(current), Object.keys(updated))) {
+						this._onDidLanguagesChange.fire();
+					}
+				}));
 	}
 }
 

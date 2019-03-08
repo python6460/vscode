@@ -19,8 +19,8 @@ import { IAccessibilityService } from 'vs/platform/accessibility/common/accessib
 
 export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 
-	private readonly _parentEditor: ICodeEditor;
-	private readonly _overwriteOptions: IEditorOptions;
+	private _parentEditor: ICodeEditor;
+	private _overwriteOptions: IEditorOptions;
 
 	constructor(
 		domElement: HTMLElement,
@@ -62,8 +62,8 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 
 export class EmbeddedDiffEditorWidget extends DiffEditorWidget {
 
-	private readonly _parentEditor: ICodeEditor;
-	private readonly _overwriteOptions: IDiffEditorOptions;
+	private _parentEditor: ICodeEditor;
+	private _overwriteOptions: IDiffEditorOptions;
 
 	constructor(
 		domElement: HTMLElement,

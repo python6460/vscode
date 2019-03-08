@@ -8,9 +8,9 @@ import { IDimension } from 'vs/editor/common/editorCommon';
 
 export class ElementSizeObserver extends Disposable {
 
-	private readonly referenceDomElement: HTMLElement | null;
+	private referenceDomElement: HTMLElement | null;
 	private measureReferenceDomElementToken: any;
-	private readonly changeCallback: () => void;
+	private changeCallback: () => void;
 	private width: number;
 	private height: number;
 

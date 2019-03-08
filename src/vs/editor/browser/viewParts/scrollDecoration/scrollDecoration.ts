@@ -14,7 +14,7 @@ import { registerThemingParticipant } from 'vs/platform/theme/common/themeServic
 
 export class ScrollDecorationViewPart extends ViewPart {
 
-	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _domNode: FastDomNode<HTMLElement>;
 	private _scrollTop: number;
 	private _width: number;
 	private _shouldShow: boolean;
@@ -38,7 +38,7 @@ export class ScrollDecorationViewPart extends ViewPart {
 	}
 
 	private _updateShouldShow(): boolean {
-		const newShouldShow = (this._useShadows && this._scrollTop > 0);
+		let newShouldShow = (this._useShadows && this._scrollTop > 0);
 		if (this._shouldShow !== newShouldShow) {
 			this._shouldShow = newShouldShow;
 			return true;

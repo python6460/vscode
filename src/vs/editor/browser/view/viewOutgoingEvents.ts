@@ -32,7 +32,7 @@ export class ViewOutgoingEvents extends Disposable {
 	public onMouseDrag: EventCallback<IEditorMouseEvent> | null = null;
 	public onMouseDrop: EventCallback<IPartialEditorMouseEvent> | null = null;
 
-	private readonly _viewModel: IViewModel;
+	private _viewModel: IViewModel;
 
 	constructor(viewModel: IViewModel) {
 		super();

@@ -950,12 +950,12 @@ export type GroupIdentifier = number;
 
 export interface IWorkbenchEditorConfiguration {
 	workbench: {
-		editor: IEditorPartConfiguration,
+		editor: IWorkbenchEditorPartConfiguration,
 		iconTheme: string;
 	};
 }
 
-interface IEditorPartConfiguration {
+export interface IWorkbenchEditorPartConfiguration {
 	showTabs?: boolean;
 	highlightModifiedTabs?: boolean;
 	tabCloseButton?: 'left' | 'right' | 'off';
@@ -972,10 +972,6 @@ interface IEditorPartConfiguration {
 	swipeToNavigate?: boolean;
 	labelFormat?: 'default' | 'short' | 'medium' | 'long';
 	restoreViewState?: boolean;
-}
-
-export interface IEditorPartOptions extends IEditorPartConfiguration {
-	iconTheme?: string;
 }
 
 export interface IResourceOptions {

@@ -32,7 +32,7 @@ export class ContextMenuController implements IEditorContribution {
 
 	private _toDispose: IDisposable[] = [];
 	private _contextMenuIsBeingShownCount: number = 0;
-	private readonly _editor: ICodeEditor;
+	private _editor: ICodeEditor;
 
 	constructor(
 		editor: ICodeEditor,

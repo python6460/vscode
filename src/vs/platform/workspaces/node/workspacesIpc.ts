@@ -33,10 +33,6 @@ export class WorkspacesChannel implements IServerChannel {
 
 				return this.service.createUntitledWorkspace(folders, remoteAuthority);
 			}
-			case 'deleteUntitledWorkspace': {
-				const w: IWorkspaceIdentifier = arg;
-				return this.service.deleteUntitledWorkspace({ id: w.id, configPath: URI.revive(w.configPath) });
-			}
 		}
 
 		throw new Error(`Call not found: ${command}`);
@@ -51,9 +47,5 @@ export class WorkspacesChannelClient implements IWorkspacesService {
 
 	createUntitledWorkspace(folders?: IWorkspaceFolderCreationData[], remoteAuthority?: string): Promise<IWorkspaceIdentifier> {
 		return this.channel.call('createUntitledWorkspace', [folders, remoteAuthority]).then(reviveWorkspaceIdentifier);
-	}
-
-	deleteUntitledWorkspace(workspaceIdentifier: IWorkspaceIdentifier): Promise<void> {
-		return this.channel.call('deleteUntitledWorkspace', workspaceIdentifier);
 	}
 }

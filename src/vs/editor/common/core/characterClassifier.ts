@@ -63,7 +63,7 @@ const enum Boolean {
 
 export class CharacterSet {
 
-	private readonly _actual: CharacterClassifier<Boolean>;
+	private _actual: CharacterClassifier<Boolean>;
 
 	constructor() {
 		this._actual = new CharacterClassifier<Boolean>(Boolean.False);

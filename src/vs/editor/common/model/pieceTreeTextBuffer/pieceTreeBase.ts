@@ -157,10 +157,10 @@ export class StringBuffer {
  * 2. TreeNode/Buffers normalization should not happen during snapshot reading.
  */
 class PieceTreeSnapshot implements ITextSnapshot {
-	private readonly _pieces: Piece[];
+	private _pieces: Piece[];
 	private _index: number;
-	private readonly _tree: PieceTreeBase;
-	private readonly _BOM: string;
+	private _tree: PieceTreeBase;
+	private _BOM: string;
 
 	constructor(tree: PieceTreeBase, BOM: string) {
 		this._pieces = [];
@@ -205,7 +205,7 @@ interface CacheEntry {
 }
 
 class PieceTreeSearchCache {
-	private readonly _limit: number;
+	private _limit: number;
 	private _cache: CacheEntry[];
 
 	constructor(limit: number) {

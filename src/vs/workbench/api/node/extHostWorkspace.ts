@@ -321,10 +321,10 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape, IExtHostWorkspac
 		return folders[0].uri.fsPath;
 	}
 
-	getRelativePath(pathOrUri: string | vscode.Uri, includeWorkspace?: boolean): string {
+	getRelativePath(pathOrUri: string | vscode.Uri, includeWorkspace?: boolean): string | undefined {
 
 		let resource: URI | undefined;
-		let path: string = '';
+		let path: string | undefined;
 		if (typeof pathOrUri === 'string') {
 			resource = URI.file(pathOrUri);
 			path = pathOrUri;
@@ -354,7 +354,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape, IExtHostWorkspac
 		if (includeWorkspace && folder.name) {
 			result = `${folder.name}/${result}`;
 		}
-		return result!;
+		return result;
 	}
 
 	private trySetWorkspaceFolders(folders: vscode.WorkspaceFolder[]): void {

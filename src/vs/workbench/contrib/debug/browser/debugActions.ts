@@ -7,11 +7,13 @@ import * as nls from 'vs/nls';
 import { Action } from 'vs/base/common/actions';
 import * as lifecycle from 'vs/base/common/lifecycle';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
+import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
+import { IFileService } from 'vs/platform/files/common/files';
 import { IDebugService, State, IDebugSession, IThread, IEnablement, IBreakpoint, IStackFrame, REPL_ID }
 	from 'vs/workbench/contrib/debug/common/debug';
 import { Variable, Expression, Thread, Breakpoint } from 'vs/workbench/contrib/debug/common/debugModel';
-import { IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
+import { IPartService } from 'vs/workbench/services/part/common/partService';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { TogglePanelAction } from 'vs/workbench/browser/panel';
@@ -111,7 +113,7 @@ export class ConfigureAction extends AbstractDebugAction {
 			configurationManager.selectConfiguration(configurationManager.getLaunches()[0]);
 		}
 
-		return configurationManager.selectedConfiguration.launch!.openConfigFile(sideBySide, false);
+		return configurationManager.selectedConfiguration.launch.openConfigFile(sideBySide, false);
 	}
 }
 
@@ -143,7 +145,7 @@ export class StartAction extends AbstractDebugAction {
 			launch = configurationManager.getLaunch(rootUri);
 			if (!launch || launch.getConfigurationNames().length === 0) {
 				const launches = configurationManager.getLaunches();
-				launch = first(launches, l => !!(l && l.getConfigurationNames().length), launch);
+				launch = first(launches, l => !!l.getConfigurationNames().length, launch);
 			}
 
 			configurationManager.selectConfiguration(launch);
@@ -192,9 +194,12 @@ export class SelectAndStartAction extends AbstractDebugAction {
 	constructor(id: string, label: string,
 		@IDebugService debugService: IDebugService,
 		@IKeybindingService keybindingService: IKeybindingService,
+		@ICommandService commandService: ICommandService,
+		@IWorkspaceContextService contextService: IWorkspaceContextService,
+		@IFileService fileService: IFileService,
 		@IQuickOpenService private readonly quickOpenService: IQuickOpenService
 	) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, undefined, debugService, keybindingService);
 	}
 
 	public run(): Promise<any> {
@@ -223,13 +228,11 @@ export class RestartAction extends AbstractDebugAction {
 		return new StartAction(StartAction.ID, StartAction.LABEL, this.debugService, this.keybindingService, this.contextService, this.historyService);
 	}
 
-	private setLabel(session: IDebugSession | undefined): void {
-		if (session) {
-			this.updateLabel(session && session.configuration.request === 'attach' ? RestartAction.RECONNECT_LABEL : RestartAction.LABEL);
-		}
+	private setLabel(session: IDebugSession): void {
+		this.updateLabel(session && session.configuration.request === 'attach' ? RestartAction.RECONNECT_LABEL : RestartAction.LABEL);
 	}
 
-	public run(session: IDebugSession | undefined): Promise<any> {
+	public run(session: IDebugSession): Promise<any> {
 		if (!session || !session.getId) {
 			session = this.debugService.getViewModel().focusedSession;
 		}
@@ -259,7 +262,7 @@ export class StepOverAction extends AbstractDebugAction {
 		super(id, label, 'debug-action step-over', debugService, keybindingService, 20);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}
@@ -280,7 +283,7 @@ export class StepIntoAction extends AbstractDebugAction {
 		super(id, label, 'debug-action step-into', debugService, keybindingService, 30);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}
@@ -301,7 +304,7 @@ export class StepOutAction extends AbstractDebugAction {
 		super(id, label, 'debug-action step-out', debugService, keybindingService, 40);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}
@@ -322,7 +325,7 @@ export class StopAction extends AbstractDebugAction {
 		super(id, label, 'debug-action stop', debugService, keybindingService, 80);
 	}
 
-	public run(session: IDebugSession | undefined): Promise<any> {
+	public run(session: IDebugSession): Promise<any> {
 		if (!session || !session.getId) {
 			session = this.debugService.getViewModel().focusedSession;
 		}
@@ -361,7 +364,7 @@ export class ContinueAction extends AbstractDebugAction {
 		super(id, label, 'debug-action continue', debugService, keybindingService, 10);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}
@@ -382,7 +385,7 @@ export class PauseAction extends AbstractDebugAction {
 		super(id, label, 'debug-action pause', debugService, keybindingService, 10);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 			if (!thread) {
@@ -405,10 +408,10 @@ export class TerminateThreadAction extends AbstractDebugAction {
 	static LABEL = nls.localize('terminateThread', "Terminate Thread");
 
 	constructor(id: string, label: string, @IDebugService debugService: IDebugService, @IKeybindingService keybindingService: IKeybindingService) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, undefined, debugService, keybindingService);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}
@@ -426,15 +429,15 @@ export class RestartFrameAction extends AbstractDebugAction {
 	static LABEL = nls.localize('restartFrame', "Restart Frame");
 
 	constructor(id: string, label: string, @IDebugService debugService: IDebugService, @IKeybindingService keybindingService: IKeybindingService) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, undefined, debugService, keybindingService);
 	}
 
-	public run(frame: IStackFrame | undefined): Promise<any> {
+	public run(frame: IStackFrame): Promise<any> {
 		if (!frame) {
 			frame = this.debugService.getViewModel().focusedStackFrame;
 		}
 
-		return frame!.restart();
+		return frame.restart();
 	}
 }
 
@@ -538,7 +541,7 @@ export class ReapplyBreakpointsAction extends AbstractDebugAction {
 	static LABEL = nls.localize('reapplyAllBreakpoints', "Reapply All Breakpoints");
 
 	constructor(id: string, label: string, @IDebugService debugService: IDebugService, @IKeybindingService keybindingService: IKeybindingService) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, null, debugService, keybindingService);
 		this.toDispose.push(this.debugService.getModel().onDidChangeBreakpoints(() => this.updateEnablement()));
 	}
 
@@ -578,7 +581,7 @@ export class SetValueAction extends AbstractDebugAction {
 	static LABEL = nls.localize('setValue', "Set Value");
 
 	constructor(id: string, label: string, private variable: Variable, @IDebugService debugService: IDebugService, @IKeybindingService keybindingService: IKeybindingService) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, null, debugService, keybindingService);
 	}
 
 	public run(): Promise<any> {
@@ -620,7 +623,7 @@ export class EditWatchExpressionAction extends AbstractDebugAction {
 	static LABEL = nls.localize('editWatchExpression', "Edit Expression");
 
 	constructor(id: string, label: string, @IDebugService debugService: IDebugService, @IKeybindingService keybindingService: IKeybindingService) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, undefined, debugService, keybindingService);
 	}
 
 	public run(expression: Expression): Promise<any> {
@@ -653,7 +656,7 @@ export class RemoveWatchExpressionAction extends AbstractDebugAction {
 	static LABEL = nls.localize('removeWatchExpression', "Remove Expression");
 
 	constructor(id: string, label: string, @IDebugService debugService: IDebugService, @IKeybindingService keybindingService: IKeybindingService) {
-		super(id, label, '', debugService, keybindingService);
+		super(id, label, undefined, debugService, keybindingService);
 	}
 
 	public run(expression: Expression): Promise<any> {
@@ -687,10 +690,10 @@ export class ToggleReplAction extends TogglePanelAction {
 	private toDispose: lifecycle.IDisposable[];
 
 	constructor(id: string, label: string,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@IPartService partService: IPartService,
 		@IPanelService panelService: IPanelService
 	) {
-		super(id, label, REPL_ID, panelService, layoutService, 'debug-action toggle-repl');
+		super(id, label, REPL_ID, panelService, partService, 'debug-action toggle-repl');
 		this.toDispose = [];
 		this.registerListeners();
 	}
@@ -737,7 +740,7 @@ export class FocusSessionAction extends AbstractDebugAction {
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IEditorService private readonly editorService: IEditorService
 	) {
-		super(id, label, '', debugService, keybindingService, 100);
+		super(id, label, null, debugService, keybindingService, 100);
 	}
 
 	public run(sessionName: string): Promise<any> {
@@ -761,7 +764,7 @@ export class StepBackAction extends AbstractDebugAction {
 		super(id, label, 'debug-action step-back', debugService, keybindingService, 50);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}
@@ -784,7 +787,7 @@ export class ReverseContinueAction extends AbstractDebugAction {
 		super(id, label, 'debug-action reverse-continue', debugService, keybindingService, 60);
 	}
 
-	public run(thread: IThread | undefined): Promise<any> {
+	public run(thread: IThread): Promise<any> {
 		if (!(thread instanceof Thread)) {
 			thread = this.debugService.getViewModel().focusedThread;
 		}

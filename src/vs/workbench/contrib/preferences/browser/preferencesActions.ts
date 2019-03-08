@@ -19,7 +19,7 @@ import { IPreferencesService } from 'vs/workbench/services/preferences/common/pr
 export class OpenRawDefaultSettingsAction extends Action {
 
 	static readonly ID = 'workbench.action.openRawDefaultSettings';
-	static readonly LABEL = nls.localize('openRawDefaultSettings', "Open Default Settings (JSON)");
+	static readonly LABEL = nls.localize('openRawDefaultSettings', "Open Raw Default Settings");
 
 	constructor(
 		id: string,

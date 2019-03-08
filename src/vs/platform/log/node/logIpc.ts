@@ -25,7 +25,7 @@ export class LogLevelSetterChannel implements IServerChannel {
 
 	call(_, command: string, arg?: any): Promise<any> {
 		switch (command) {
-			case 'setLevel': this.service.setLevel(arg); return Promise.resolve();
+			case 'setLevel': this.service.setLevel(arg);
 		}
 
 		throw new Error(`Call not found: ${command}`);

@@ -13,9 +13,9 @@ import { ViewEventHandler } from 'vs/editor/common/viewModel/viewEventHandler';
 
 export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 
-	private readonly _context: ViewContext;
-	private readonly _domNode: FastDomNode<HTMLCanvasElement>;
-	private readonly _zoneManager: OverviewZoneManager;
+	private _context: ViewContext;
+	private _domNode: FastDomNode<HTMLCanvasElement>;
+	private _zoneManager: OverviewZoneManager;
 
 	constructor(context: ViewContext, cssClassName: string) {
 		super();
@@ -114,10 +114,10 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 		const width = this._zoneManager.getCanvasWidth();
 		const height = this._zoneManager.getCanvasHeight();
 
-		const colorZones = this._zoneManager.resolveColorZones();
-		const id2Color = this._zoneManager.getId2Color();
+		let colorZones = this._zoneManager.resolveColorZones();
+		let id2Color = this._zoneManager.getId2Color();
 
-		const ctx = this._domNode.domNode.getContext('2d')!;
+		let ctx = this._domNode.domNode.getContext('2d')!;
 		ctx.clearRect(0, 0, width, height);
 		if (colorZones.length > 0) {
 			this._renderOneLane(ctx, colorZones, id2Color, width);

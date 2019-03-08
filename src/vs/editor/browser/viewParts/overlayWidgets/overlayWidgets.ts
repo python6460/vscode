@@ -24,7 +24,7 @@ interface IWidgetMap {
 export class ViewOverlayWidgets extends ViewPart {
 
 	private _widgets: IWidgetMap;
-	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _domNode: FastDomNode<HTMLElement>;
 
 	private _verticalScrollbarWidth: number;
 	private _minimapWidth: number;
@@ -90,7 +90,7 @@ export class ViewOverlayWidgets extends ViewPart {
 	}
 
 	public setWidgetPosition(widget: IOverlayWidget, preference: OverlayWidgetPositionPreference | null): boolean {
-		const widgetData = this._widgets[widget.getId()];
+		let widgetData = this._widgets[widget.getId()];
 		if (widgetData.preference === preference) {
 			return false;
 		}
@@ -102,7 +102,7 @@ export class ViewOverlayWidgets extends ViewPart {
 	}
 
 	public removeWidget(widget: IOverlayWidget): void {
-		const widgetId = widget.getId();
+		let widgetId = widget.getId();
 		if (this._widgets.hasOwnProperty(widgetId)) {
 			const widgetData = this._widgets[widgetId];
 			const domNode = widgetData.domNode.domNode;
@@ -125,7 +125,7 @@ export class ViewOverlayWidgets extends ViewPart {
 			domNode.setTop(0);
 			domNode.setRight((2 * this._verticalScrollbarWidth) + this._minimapWidth);
 		} else if (widgetData.preference === OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER) {
-			const widgetHeight = domNode.domNode.clientHeight;
+			let widgetHeight = domNode.domNode.clientHeight;
 			domNode.setTop((this._editorHeight - widgetHeight - 2 * this._horizontalScrollbarHeight));
 			domNode.setRight((2 * this._verticalScrollbarWidth) + this._minimapWidth);
 		} else if (widgetData.preference === OverlayWidgetPositionPreference.TOP_CENTER) {
@@ -141,9 +141,9 @@ export class ViewOverlayWidgets extends ViewPart {
 	public render(ctx: RestrictedRenderingContext): void {
 		this._domNode.setWidth(this._editorWidth);
 
-		const keys = Object.keys(this._widgets);
+		let keys = Object.keys(this._widgets);
 		for (let i = 0, len = keys.length; i < len; i++) {
-			const widgetId = keys[i];
+			let widgetId = keys[i];
 			this._renderWidget(this._widgets[widgetId]);
 		}
 	}

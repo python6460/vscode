@@ -29,7 +29,7 @@ export class SimpleReplElement implements IReplElement {
 		private id: string,
 		public value: string,
 		public severity: severity,
-		public sourceData?: IReplElementSource,
+		public sourceData: IReplElementSource,
 	) { }
 
 	toString(): string {
@@ -98,19 +98,19 @@ export class ExpressionContainer implements IExpressionContainer {
 	protected children?: Promise<IExpression[]>;
 
 	constructor(
-		protected session: IDebugSession | undefined,
-		private _reference: number | undefined,
+		protected session: IDebugSession,
+		private _reference: number,
 		private id: string,
-		public namedVariables: number | undefined = 0,
-		public indexedVariables: number | undefined = 0,
-		private startOfVariables: number | undefined = 0
+		public namedVariables = 0,
+		public indexedVariables = 0,
+		private startOfVariables = 0
 	) { }
 
-	get reference(): number | undefined {
+	get reference(): number {
 		return this._reference;
 	}
 
-	set reference(value: number | undefined) {
+	set reference(value: number) {
 		this._reference = value;
 		this.children = undefined; // invalidate children cache
 	}
@@ -137,17 +137,17 @@ export class ExpressionContainer implements IExpressionContainer {
 		return childrenThenable.then(childrenArray => {
 			// Use a dynamic chunk size based on the number of elements #9774
 			let chunkSize = ExpressionContainer.BASE_CHUNK_SIZE;
-			while (!!this.indexedVariables && this.indexedVariables > chunkSize * ExpressionContainer.BASE_CHUNK_SIZE) {
+			while (this.indexedVariables > chunkSize * ExpressionContainer.BASE_CHUNK_SIZE) {
 				chunkSize *= ExpressionContainer.BASE_CHUNK_SIZE;
 			}
 
-			if (!!this.indexedVariables && this.indexedVariables > chunkSize) {
+			if (this.indexedVariables > chunkSize) {
 				// There are a lot of children, create fake intermediate values that represent chunks #9537
 				const numberOfChunks = Math.ceil(this.indexedVariables / chunkSize);
 				for (let i = 0; i < numberOfChunks; i++) {
-					const start = (this.startOfVariables || 0) + i * chunkSize;
+					const start = this.startOfVariables + i * chunkSize;
 					const count = Math.min(chunkSize, this.indexedVariables - i * chunkSize);
-					childrenArray.push(new Variable(this.session, this, this.reference, `[${start}..${start + count - 1}]`, '', '', undefined, count, { kind: 'virtual' }, undefined, true, start));
+					childrenArray.push(new Variable(this.session, this, this.reference, `[${start}..${start + count - 1}]`, '', '', null, count, { kind: 'virtual' }, null, true, start));
 				}
 
 				return childrenArray;
@@ -168,16 +168,16 @@ export class ExpressionContainer implements IExpressionContainer {
 
 	get hasChildren(): boolean {
 		// only variables with reference > 0 have children.
-		return !!this.reference && this.reference > 0;
+		return this.reference > 0;
 	}
 
-	private fetchVariables(start: number | undefined, count: number | undefined, filter: 'indexed' | 'named' | undefined): Promise<Variable[]> {
-		return this.session!.variables(this.reference, filter, start, count).then(response => {
+	private fetchVariables(start: number, count: number, filter: 'indexed' | 'named'): Promise<Variable[]> {
+		return this.session.variables(this.reference, filter, start, count).then(response => {
 			return response && response.body && response.body.variables
-				? distinct(response.body.variables.filter(v => !!v && isString(v.name)), (v: DebugProtocol.Variable) => v.name).map((v: DebugProtocol.Variable) =>
-					new Variable(this.session, this, v.variablesReference, v.name, v.evaluateName, v.value, v.namedVariables, v.indexedVariables, v.presentationHint, v.type))
+				? distinct(response.body.variables.filter(v => !!v && isString(v.name)), v => v.name).map(
+					v => new Variable(this.session, this, v.variablesReference, v.name, v.evaluateName, v.value, v.namedVariables, v.indexedVariables, v.presentationHint, v.type))
 				: [];
-		}, (e: Error) => [new Variable(this.session, this, 0, e.message, e.message, '', 0, 0, { kind: 'virtual' }, undefined, false)]);
+		}, (e: Error) => [new Variable(this.session, this, 0, e.message, e.message, '', 0, 0, { kind: 'virtual' }, null, false)]);
 	}
 
 	// The adapter explicitly sents the children count of an expression only if there are lots of children which should be chunked.
@@ -204,7 +204,7 @@ export class Expression extends ExpressionContainer implements IExpression {
 	public type: string;
 
 	constructor(public name: string, id = generateUuid()) {
-		super(undefined, 0, id);
+		super(null, 0, id);
 		this.available = false;
 		// name is not set if the expression is just being added
 		// in that case do not set default value to prevent flashing #14499
@@ -230,7 +230,7 @@ export class Expression extends ExpressionContainer implements IExpression {
 				this.reference = response.body.variablesReference;
 				this.namedVariables = response.body.namedVariables;
 				this.indexedVariables = response.body.indexedVariables;
-				this.type = response.body.type || this.type;
+				this.type = response.body.type;
 			}
 		}, err => {
 			this.value = err.message;
@@ -250,15 +250,15 @@ export class Variable extends ExpressionContainer implements IExpression {
 	public errorMessage: string;
 
 	constructor(
-		session: IDebugSession | undefined,
+		session: IDebugSession,
 		public parent: IExpressionContainer,
-		reference: number | undefined,
+		reference: number,
 		public name: string,
-		public evaluateName: string | undefined,
+		public evaluateName: string,
 		value: string,
-		namedVariables: number | undefined,
-		indexedVariables: number | undefined,
-		public presentationHint: DebugProtocol.VariablePresentationHint | undefined,
+		namedVariables: number,
+		indexedVariables: number,
+		public presentationHint: DebugProtocol.VariablePresentationHint,
 		public type: string | undefined = undefined,
 		public available = true,
 		startOfVariables = 0
@@ -268,10 +268,6 @@ export class Variable extends ExpressionContainer implements IExpression {
 	}
 
 	setVariable(value: string): Promise<any> {
-		if (!this.session) {
-			return Promise.resolve(undefined);
-		}
-
 		return this.session.setVariable((<ExpressionContainer>this.parent).reference, this.name, value).then(response => {
 			if (response && response.body) {
 				this.value = response.body.value;
@@ -298,8 +294,8 @@ export class Scope extends ExpressionContainer implements IScope {
 		public name: string,
 		reference: number,
 		public expensive: boolean,
-		namedVariables?: number,
-		indexedVariables?: number,
+		namedVariables: number,
+		indexedVariables: number,
 		public range?: IRange
 	) {
 		super(stackFrame.thread.session, reference, `scope:${stackFrame.getId()}:${name}:${index}`, namedVariables, indexedVariables);
@@ -319,7 +315,7 @@ export class StackFrame implements IStackFrame {
 		public frameId: number,
 		public source: Source,
 		public name: string,
-		public presentationHint: string | undefined,
+		public presentationHint: string,
 		public range: IRange,
 		private index: number
 	) {
@@ -335,7 +331,7 @@ export class StackFrame implements IStackFrame {
 			this.scopes = this.thread.session.scopes(this.frameId).then(response => {
 				return response && response.body && response.body.scopes ?
 					response.body.scopes.map((rs, index) => new Scope(this, index, rs.name, rs.variablesReference, rs.expensive, rs.namedVariables, rs.indexedVariables,
-						rs.line && rs.column && rs.endLine && rs.endColumn ? new Range(rs.line, rs.column, rs.endLine, rs.endColumn) : undefined)) : [];
+						rs.line && rs.column && rs.endLine && rs.endColumn ? new Range(rs.line, rs.column, rs.endLine, rs.endColumn) : null)) : [];
 			}, err => []);
 		}
 
@@ -397,6 +393,7 @@ export class Thread implements IThread {
 	public stopped: boolean;
 
 	constructor(public session: IDebugSession, public name: string, public threadId: number) {
+		this.stoppedDetails = null;
 		this.callStack = [];
 		this.staleCallStack = [];
 		this.stopped = false;
@@ -468,8 +465,8 @@ export class Thread implements IThread {
 				return new StackFrame(this, rsf.id, source, rsf.name, rsf.presentationHint, new Range(
 					rsf.line,
 					rsf.column,
-					rsf.endLine || rsf.line,
-					rsf.endColumn || rsf.column
+					rsf.endLine,
+					rsf.endColumn
 				), startFrame + index);
 			});
 		}, (err: Error) => {
@@ -548,9 +545,9 @@ export class BaseBreakpoint extends Enablement implements IBaseBreakpoint {
 
 	constructor(
 		enabled: boolean,
-		public hitCondition: string | undefined,
-		public condition: string | undefined,
-		public logMessage: string | undefined,
+		public hitCondition: string,
+		public condition: string,
+		public logMessage: string,
 		id: string
 	) {
 		super(enabled, id);
@@ -597,11 +594,11 @@ export class Breakpoint extends BaseBreakpoint implements IBreakpoint {
 	constructor(
 		public uri: uri,
 		private _lineNumber: number,
-		private _column: number | undefined,
+		private _column: number,
 		enabled: boolean,
-		condition: string | undefined,
-		hitCondition: string | undefined,
-		logMessage: string | undefined,
+		condition: string,
+		hitCondition: string,
+		logMessage: string,
 		private _adapterData: any,
 		private textFileService: ITextFileService,
 		id = generateUuid()
@@ -623,7 +620,7 @@ export class Breakpoint extends BaseBreakpoint implements IBreakpoint {
 		return true;
 	}
 
-	get column(): number | undefined {
+	get column(): number {
 		const data = this.getSessionData();
 		// Only respect the column if the user explictly set the column to have an inline breakpoint
 		return data && typeof data.column === 'number' && typeof this._column === 'number' ? data.column : this._column;
@@ -701,9 +698,9 @@ export class FunctionBreakpoint extends BaseBreakpoint implements IFunctionBreak
 	constructor(
 		public name: string,
 		enabled: boolean,
-		hitCondition: string | undefined,
-		condition: string | undefined,
-		logMessage: string | undefined,
+		hitCondition: string,
+		condition: string,
+		logMessage: string,
 		id = generateUuid()
 	) {
 		super(enabled, hitCondition, condition, logMessage, id);
@@ -801,7 +798,7 @@ export class DebugModel implements IDebugModel {
 		this._onDidChangeCallStack.fire(undefined);
 	}
 
-	get onDidChangeBreakpoints(): Event<IBreakpointsChangeEvent | undefined> {
+	get onDidChangeBreakpoints(): Event<IBreakpointsChangeEvent> {
 		return this._onDidChangeBreakpoints.event;
 	}
 
@@ -835,7 +832,7 @@ export class DebugModel implements IDebugModel {
 	fetchCallStack(thread: Thread): { topCallStack: Promise<void>, wholeCallStack: Promise<void> } {
 		if (thread.session.capabilities.supportsDelayedStackTraceLoading) {
 			// For improved performance load the first stack frame and then load the rest async.
-			let topCallStack = Promise.resolve();
+			let topCallStack: Promise<void>;
 			const wholeCallStack = new Promise<void>((c, e) => {
 				topCallStack = thread.fetchCallStack(1).then(() => {
 					if (!this.schedulers.has(thread.getId())) {
@@ -916,7 +913,7 @@ export class DebugModel implements IDebugModel {
 	}
 
 	addBreakpoints(uri: uri, rawData: IBreakpointData[], fireEvent = true): IBreakpoint[] {
-		const newBreakpoints = rawData.map(rawBp => new Breakpoint(uri, rawBp.lineNumber, rawBp.column, !!rawBp.enabled, rawBp.condition, rawBp.hitCondition, rawBp.logMessage, undefined, this.textFileService, rawBp.id));
+		const newBreakpoints = rawData.map(rawBp => new Breakpoint(uri, rawBp.lineNumber, rawBp.column, rawBp.enabled, rawBp.condition, rawBp.hitCondition, rawBp.logMessage, undefined, this.textFileService, rawBp.id));
 		newBreakpoints.forEach(bp => bp.setSessionId(this.breakpointsSessionId));
 		this.breakpoints = this.breakpoints.concat(newBreakpoints);
 		this.breakpointsActivated = true;
@@ -982,10 +979,7 @@ export class DebugModel implements IDebugModel {
 				return resources.basenameOrAuthority(first.uri).localeCompare(resources.basenameOrAuthority(second.uri));
 			}
 			if (first.lineNumber === second.lineNumber) {
-				if (first.column && second.column) {
-					return first.column - second.column;
-				}
-				return -1;
+				return first.column - second.column;
 			}
 
 			return first.lineNumber - second.lineNumber;
@@ -1043,7 +1037,7 @@ export class DebugModel implements IDebugModel {
 
 	removeFunctionBreakpoints(id?: string): void {
 
-		let removed: FunctionBreakpoint[];
+		let removed: IFunctionBreakpoint[];
 		if (id) {
 			removed = this.functionBreakpoints.filter(fbp => fbp.getId() === id);
 			this.functionBreakpoints = this.functionBreakpoints.filter(fbp => fbp.getId() !== id);
@@ -1081,11 +1075,10 @@ export class DebugModel implements IDebugModel {
 
 	moveWatchExpression(id: string, position: number): void {
 		const we = this.watchExpressions.filter(we => we.getId() === id).pop();
-		if (we) {
-			this.watchExpressions = this.watchExpressions.filter(we => we.getId() !== id);
-			this.watchExpressions = this.watchExpressions.slice(0, position).concat(we, this.watchExpressions.slice(position));
-			this._onDidChangeWatchExpressions.fire(undefined);
-		}
+		this.watchExpressions = this.watchExpressions.filter(we => we.getId() !== id);
+		this.watchExpressions = this.watchExpressions.slice(0, position).concat(we, this.watchExpressions.slice(position));
+
+		this._onDidChangeWatchExpressions.fire(undefined);
 	}
 
 	sourceIsNotAvailable(uri: uri): void {

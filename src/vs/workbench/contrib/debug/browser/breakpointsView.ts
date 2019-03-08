@@ -150,7 +150,7 @@ export class BreakpointsView extends ViewletPanel {
 
 		const breakpointType = element instanceof Breakpoint && element.logMessage ? nls.localize('Logpoint', "Logpoint") : nls.localize('Breakpoint', "Breakpoint");
 		if (element instanceof Breakpoint || element instanceof FunctionBreakpoint) {
-			actions.push(new Action('workbench.action.debug.openEditorAndEditBreakpoint', nls.localize('editBreakpoint', "Edit {0}...", breakpointType), '', true, () => {
+			actions.push(new Action('workbench.action.debug.openEditorAndEditBreakpoint', nls.localize('editBreakpoint', "Edit {0}...", breakpointType), undefined, true, () => {
 				if (element instanceof Breakpoint) {
 					return openBreakpointSource(element, false, false, this.debugService, this.editorService).then(editor => {
 						if (editor) {
@@ -164,7 +164,7 @@ export class BreakpointsView extends ViewletPanel {
 
 				this.debugService.getViewModel().setSelectedFunctionBreakpoint(element);
 				this.onBreakpointsChange();
-				return Promise.resolve(undefined);
+				return undefined;
 			}));
 			actions.push(new Separator());
 		}
@@ -252,7 +252,7 @@ class BreakpointsDelegate implements IListVirtualDelegate<IEnablement> {
 			return ExceptionBreakpointsRenderer.ID;
 		}
 
-		return '';
+		return undefined;
 	}
 }
 
@@ -535,7 +535,7 @@ class FunctionBreakpointInputRenderer implements IListRenderer<IFunctionBreakpoi
 	}
 }
 
-export function openBreakpointSource(breakpoint: IBreakpoint, sideBySide: boolean, preserveFocus: boolean, debugService: IDebugService, editorService: IEditorService): Promise<IEditor | null> {
+export function openBreakpointSource(breakpoint: IBreakpoint, sideBySide: boolean, preserveFocus: boolean, debugService: IDebugService, editorService: IEditorService): Promise<IEditor> {
 	if (breakpoint.uri.scheme === DEBUG_SCHEME && debugService.state === State.Inactive) {
 		return Promise.resolve(null);
 	}
@@ -543,8 +543,8 @@ export function openBreakpointSource(breakpoint: IBreakpoint, sideBySide: boolea
 	const selection = breakpoint.endLineNumber ? {
 		startLineNumber: breakpoint.lineNumber,
 		endLineNumber: breakpoint.endLineNumber,
-		startColumn: breakpoint.column || 1,
-		endColumn: breakpoint.endColumn || Constants.MAX_SAFE_SMALL_INTEGER
+		startColumn: breakpoint.column,
+		endColumn: breakpoint.endColumn
 	} : {
 			startLineNumber: breakpoint.lineNumber,
 			startColumn: breakpoint.column || 1,

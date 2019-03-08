@@ -9,7 +9,7 @@ import { ITerminalService, TERMINAL_PANEL_ID, ITerminalInstance, IShellLaunchCon
 import { TerminalService as CommonTerminalService } from 'vs/workbench/contrib/terminal/common/terminalService';
 import { IContextKeyService, IContextKey } from 'vs/platform/contextkey/common/contextkey';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
-import { IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
+import { IPartService } from 'vs/workbench/services/part/common/partService';
 import { ILifecycleService } from 'vs/platform/lifecycle/common/lifecycle';
 import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
 import { TerminalPanel } from 'vs/workbench/contrib/terminal/browser/terminalPanel';
@@ -29,7 +29,7 @@ export abstract class TerminalService extends CommonTerminalService implements I
 	constructor(
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IPanelService panelService: IPanelService,
-		@IWorkbenchLayoutService private _layoutService: IWorkbenchLayoutService,
+		@IPartService partService: IPartService,
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IStorageService storageService: IStorageService,
 		@INotificationService notificationService: INotificationService,
@@ -37,9 +37,9 @@ export abstract class TerminalService extends CommonTerminalService implements I
 		@IInstantiationService protected readonly _instantiationService: IInstantiationService,
 		@IWindowService private _windowService: IWindowService,
 		@IExtensionService extensionService: IExtensionService,
-		@IFileService fileService: IFileService,
+		@IFileService fileService: IFileService
 	) {
-		super(contextKeyService, panelService, lifecycleService, storageService, notificationService, dialogService, extensionService, fileService);
+		super(contextKeyService, panelService, partService, lifecycleService, storageService, notificationService, dialogService, extensionService, fileService);
 	}
 
 	protected abstract _getDefaultShell(p: platform.Platform): string;
@@ -171,12 +171,5 @@ export abstract class TerminalService extends CommonTerminalService implements I
 		this._configHelper.panelContainer = panelContainer;
 		this._terminalContainer = terminalContainer;
 		this._terminalTabs.forEach(tab => tab.attachToElement(this._terminalContainer));
-	}
-
-	public hidePanel(): void {
-		const panel = this._panelService.getActivePanel();
-		if (panel && panel.getId() === TERMINAL_PANEL_ID) {
-			this._layoutService.setPanelHidden(true);
-		}
 	}
 }

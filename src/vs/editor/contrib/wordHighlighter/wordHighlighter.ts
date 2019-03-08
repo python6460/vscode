@@ -112,7 +112,7 @@ class SemanticOccurenceAtPositionRequest extends OccurenceAtPositionRequest {
 
 class TextualOccurenceAtPositionRequest extends OccurenceAtPositionRequest {
 
-	private readonly _selectionIsEmpty: boolean;
+	private _selectionIsEmpty: boolean;
 
 	constructor(model: ITextModel, selection: Selection, wordSeparators: string) {
 		super(model, selection, wordSeparators);
@@ -160,9 +160,9 @@ registerDefaultLanguageCommand('_executeDocumentHighlights', (model, position) =
 
 class WordHighlighter {
 
-	private readonly editor: IActiveCodeEditor;
+	private editor: IActiveCodeEditor;
 	private occurrencesHighlight: boolean;
-	private readonly model: ITextModel;
+	private model: ITextModel;
 	private _decorationIds: string[];
 	private toUnhook: IDisposable[];
 
@@ -174,7 +174,7 @@ class WordHighlighter {
 	private lastCursorPositionChangeTime: number = 0;
 	private renderDecorationsTimer: any = -1;
 
-	private readonly _hasWordHighlights: IContextKey<boolean>;
+	private _hasWordHighlights: IContextKey<boolean>;
 	private _ignorePositionChangeEvent: boolean;
 
 	constructor(editor: IActiveCodeEditor, contextKeyService: IContextKeyService) {
@@ -526,7 +526,7 @@ class WordHighlighterContribution extends Disposable implements editorCommon.IEd
 
 class WordHighlightNavigationAction extends EditorAction {
 
-	private readonly _isNext: boolean;
+	private _isNext: boolean;
 
 	constructor(next: boolean, opts: IActionOptions) {
 		super(opts);

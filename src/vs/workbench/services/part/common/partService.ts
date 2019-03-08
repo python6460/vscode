@@ -3,21 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ServiceIdentifier, createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { createDecorator, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 import { Event } from 'vs/base/common/event';
 import { MenuBarVisibility } from 'vs/platform/windows/common/windows';
-import { ILayoutService } from 'vs/platform/layout/browser/layoutService';
-import { Part } from 'vs/workbench/browser/part';
-
-export const IWorkbenchLayoutService = createDecorator<IWorkbenchLayoutService>('layoutService');
 
 export const enum Parts {
-	TITLEBAR_PART = 'workbench.parts.titlebar',
-	ACTIVITYBAR_PART = 'workbench.parts.activitybar',
-	SIDEBAR_PART = 'workbench.parts.sidebar',
-	PANEL_PART = 'workbench.parts.panel',
-	EDITOR_PART = 'workbench.parts.editor',
-	STATUSBAR_PART = 'workbench.parts.statusbar'
+	ACTIVITYBAR_PART,
+	SIDEBAR_PART,
+	PANEL_PART,
+	EDITOR_PART,
+	STATUSBAR_PART,
+	TITLEBAR_PART
 }
 
 export const enum Position {
@@ -31,19 +27,25 @@ export interface ILayoutOptions {
 	source?: Parts;
 }
 
-export interface IWorkbenchLayoutService extends ILayoutService {
+export interface IDimension {
+	readonly width: number;
+	readonly height: number;
+}
 
+export const IPartService = createDecorator<IPartService>('partService');
+
+export interface IPartService {
 	_serviceBrand: ServiceIdentifier<any>;
 
 	/**
 	 * Emits when the visibility of the title bar changes.
 	 */
-	readonly onTitleBarVisibilityChange: Event<void>;
+	onTitleBarVisibilityChange: Event<void>;
 
 	/**
 	 * Emits when the zen mode is enabled or disabled.
 	 */
-	readonly onZenModeChange: Event<boolean>;
+	onZenModeChange: Event<boolean>;
 
 	/**
 	 * Asks the part service if all parts have been fully restored. For editor part
@@ -147,9 +149,4 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 	 * Resizes currently focused part on main access
 	 */
 	resizePart(part: Parts, sizeChange: number): void;
-
-	/**
-	 * Register a part to participate in the layout.
-	 */
-	registerPart(part: Part): void;
 }

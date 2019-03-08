@@ -114,7 +114,7 @@ export class MainThreadTextEditors implements MainThreadTextEditorsShape {
 
 	// --- from extension host process
 
-	$tryShowTextDocument(resource: UriComponents, options: ITextDocumentShowOptions): Promise<string | undefined> {
+	$tryShowTextDocument(resource: UriComponents, options: ITextDocumentShowOptions): Promise<string> {
 		const uri = URI.revive(resource);
 
 		const editorOptions: ITextEditorOptions = {

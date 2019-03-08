@@ -11,7 +11,7 @@ import { Action } from 'vs/base/common/actions';
 import { SyncActionDescriptor, MenuId, MenuRegistry } from 'vs/platform/actions/common/actions';
 import { IWorkbenchActionRegistry, Extensions } from 'vs/workbench/common/actions';
 import { IConfigurationService, ConfigurationTarget } from 'vs/platform/configuration/common/configuration';
-import { IWorkbenchLayoutService, Parts, Position } from 'vs/workbench/services/layout/browser/layoutService';
+import { IPartService, Parts, Position } from 'vs/workbench/services/part/common/partService';
 import { CommandsRegistry } from 'vs/platform/commands/common/commands';
 import { IEditorGroupsService, GroupOrientation } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
@@ -39,16 +39,16 @@ export class ToggleActivityBarVisibilityAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IConfigurationService private readonly configurationService: IConfigurationService
 	) {
 		super(id, label);
 
-		this.enabled = !!this.layoutService;
+		this.enabled = !!this.partService;
 	}
 
 	run(): Promise<any> {
-		const visibility = this.layoutService.isVisible(Parts.ACTIVITYBAR_PART);
+		const visibility = this.partService.isVisible(Parts.ACTIVITYBAR_PART);
 		const newVisibilityValue = !visibility;
 
 		return this.configurationService.updateValue(ToggleActivityBarVisibilityAction.activityBarVisibleKey, newVisibilityValue, ConfigurationTarget.USER);
@@ -76,14 +76,14 @@ class ToggleCenteredLayout extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
 		super(id, label);
-		this.enabled = !!this.layoutService;
+		this.enabled = !!this.partService;
 	}
 
 	run(): Promise<any> {
-		this.layoutService.centerEditorLayout(!this.layoutService.isEditorLayoutCentered());
+		this.partService.centerEditorLayout(!this.partService.isEditorLayoutCentered());
 
 		return Promise.resolve();
 	}
@@ -180,23 +180,23 @@ export class ToggleSidebarPositionAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IConfigurationService private readonly configurationService: IConfigurationService
 	) {
 		super(id, label);
 
-		this.enabled = !!this.layoutService && !!this.configurationService;
+		this.enabled = !!this.partService && !!this.configurationService;
 	}
 
 	run(): Promise<any> {
-		const position = this.layoutService.getSideBarPosition();
+		const position = this.partService.getSideBarPosition();
 		const newPositionValue = (position === Position.LEFT) ? 'right' : 'left';
 
 		return this.configurationService.updateValue(ToggleSidebarPositionAction.sidebarPositionConfigurationKey, newPositionValue, ConfigurationTarget.USER);
 	}
 
-	static getLabel(layoutService: IWorkbenchLayoutService): string {
-		return layoutService.getSideBarPosition() === Position.LEFT ? nls.localize('moveSidebarRight', "Move Side Bar Right") : nls.localize('moveSidebarLeft', "Move Side Bar Left");
+	static getLabel(partService: IPartService): string {
+		return partService.getSideBarPosition() === Position.LEFT ? nls.localize('moveSidebarRight', "Move Side Bar Right") : nls.localize('moveSidebarLeft', "Move Side Bar Left");
 	}
 }
 
@@ -220,16 +220,16 @@ export class ToggleEditorVisibilityAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
 		super(id, label);
 
-		this.enabled = !!this.layoutService;
+		this.enabled = !!this.partService;
 	}
 
 	run(): Promise<any> {
-		const hideEditor = this.layoutService.isVisible(Parts.EDITOR_PART);
-		this.layoutService.setEditorHidden(hideEditor);
+		const hideEditor = this.partService.isVisible(Parts.EDITOR_PART);
+		this.partService.setEditorHidden(hideEditor);
 
 		return Promise.resolve();
 	}
@@ -247,16 +247,16 @@ export class ToggleSidebarVisibilityAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
 		super(id, label);
 
-		this.enabled = !!this.layoutService;
+		this.enabled = !!this.partService;
 	}
 
 	run(): Promise<any> {
-		const hideSidebar = this.layoutService.isVisible(Parts.SIDEBAR_PART);
-		this.layoutService.setSideBarHidden(hideSidebar);
+		const hideSidebar = this.partService.isVisible(Parts.SIDEBAR_PART);
+		this.partService.setSideBarHidden(hideSidebar);
 
 		return Promise.resolve();
 	}
@@ -285,16 +285,16 @@ class ToggleStatusbarVisibilityAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IConfigurationService private readonly configurationService: IConfigurationService
 	) {
 		super(id, label);
 
-		this.enabled = !!this.layoutService;
+		this.enabled = !!this.partService;
 	}
 
 	run(): Promise<any> {
-		const visibility = this.layoutService.isVisible(Parts.STATUSBAR_PART);
+		const visibility = this.partService.isVisible(Parts.STATUSBAR_PART);
 		const newVisibilityValue = !visibility;
 
 		return this.configurationService.updateValue(ToggleStatusbarVisibilityAction.statusbarVisibleKey, newVisibilityValue, ConfigurationTarget.USER);
@@ -353,14 +353,14 @@ class ToggleZenMode extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService
+		@IPartService private readonly partService: IPartService
 	) {
 		super(id, label);
-		this.enabled = !!this.layoutService;
+		this.enabled = !!this.partService;
 	}
 
 	run(): Promise<any> {
-		this.layoutService.toggleZenMode();
+		this.partService.toggleZenMode();
 
 		return Promise.resolve();
 	}
@@ -381,8 +381,8 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: 'workbench.action.exitZenMode',
 	weight: KeybindingWeight.EditorContrib - 1000,
 	handler(accessor: ServicesAccessor) {
-		const layoutService = accessor.get(IWorkbenchLayoutService);
-		layoutService.toggleZenMode();
+		const partService = accessor.get(IPartService);
+		partService.toggleZenMode();
 	},
 	when: InEditorZenModeContext,
 	primary: KeyChord(KeyCode.Escape, KeyCode.Escape)
@@ -447,15 +447,15 @@ export abstract class BaseResizeViewAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService protected layoutService: IWorkbenchLayoutService
+		@IPartService protected partService: IPartService
 	) {
 		super(id, label);
 	}
 
 	protected resizePart(sizeChange: number): void {
-		const isEditorFocus = this.layoutService.hasFocus(Parts.EDITOR_PART);
-		const isSidebarFocus = this.layoutService.hasFocus(Parts.SIDEBAR_PART);
-		const isPanelFocus = this.layoutService.hasFocus(Parts.PANEL_PART);
+		const isEditorFocus = this.partService.hasFocus(Parts.EDITOR_PART);
+		const isSidebarFocus = this.partService.hasFocus(Parts.SIDEBAR_PART);
+		const isPanelFocus = this.partService.hasFocus(Parts.PANEL_PART);
 
 		let part: Parts | undefined;
 		if (isSidebarFocus) {
@@ -467,7 +467,7 @@ export abstract class BaseResizeViewAction extends Action {
 		}
 
 		if (part) {
-			this.layoutService.resizePart(part, sizeChange);
+			this.partService.resizePart(part, sizeChange);
 		}
 	}
 }
@@ -480,9 +480,9 @@ export class IncreaseViewSizeAction extends BaseResizeViewAction {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService
+		@IPartService partService: IPartService
 	) {
-		super(id, label, layoutService);
+		super(id, label, partService);
 	}
 
 	run(): Promise<boolean> {
@@ -499,10 +499,10 @@ export class DecreaseViewSizeAction extends BaseResizeViewAction {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService
+		@IPartService partService: IPartService
 
 	) {
-		super(id, label, layoutService);
+		super(id, label, partService);
 	}
 
 	run(): Promise<boolean> {

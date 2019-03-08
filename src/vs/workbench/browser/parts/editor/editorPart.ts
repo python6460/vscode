@@ -9,14 +9,14 @@ import { Part } from 'vs/workbench/browser/part';
 import { Dimension, isAncestor, toggleClass, addClass, $ } from 'vs/base/browser/dom';
 import { Event, Emitter, Relay } from 'vs/base/common/event';
 import { contrastBorder, editorBackground } from 'vs/platform/theme/common/colorRegistry';
-import { GroupDirection, IAddGroupOptions, GroupsArrangement, GroupOrientation, IMergeGroupOptions, MergeGroupMode, ICopyEditorOptions, GroupsOrder, GroupChangeKind, GroupLocation, IFindGroupScope, EditorGroupLayout, GroupLayoutArgument, IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
-import { IInstantiationService, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
-import { Direction, SerializableGrid, Sizing, ISerializedGrid, Orientation, GridBranchNode, isGridBranchNode, GridNode, createSerializedGrid, Grid } from 'vs/base/browser/ui/grid/grid';
-import { GroupIdentifier, IWorkbenchEditorConfiguration, IEditorPartOptions } from 'vs/workbench/common/editor';
+import { GroupDirection, IAddGroupOptions, GroupsArrangement, GroupOrientation, IMergeGroupOptions, MergeGroupMode, ICopyEditorOptions, GroupsOrder, GroupChangeKind, GroupLocation, IFindGroupScope, EditorGroupLayout, GroupLayoutArgument } from 'vs/workbench/services/editor/common/editorGroupsService';
+import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { Direction, SerializableGrid, Sizing, ISerializedGrid, Orientation, GridBranchNode, isGridBranchNode, GridNode, createSerializedGrid, Grid, ISerializableView } from 'vs/base/browser/ui/grid/grid';
+import { GroupIdentifier, IWorkbenchEditorConfiguration } from 'vs/workbench/common/editor';
 import { values } from 'vs/base/common/map';
 import { EDITOR_GROUP_BORDER, EDITOR_PANE_BACKGROUND } from 'vs/workbench/common/theme';
 import { distinct } from 'vs/base/common/arrays';
-import { IEditorGroupsAccessor, IEditorGroupView, getEditorPartOptions, impactsEditorPartOptions, IEditorPartOptionsChangeEvent, IEditorPartCreationOptions } from 'vs/workbench/browser/parts/editor/editor';
+import { IEditorGroupsAccessor, IEditorGroupView, IEditorPartOptions, getEditorPartOptions, impactsEditorPartOptions, IEditorPartOptionsChangeEvent, EditorGroupsServiceImpl } from 'vs/workbench/browser/parts/editor/editor';
 import { EditorGroupView } from 'vs/workbench/browser/parts/editor/editorGroupView';
 import { IConfigurationService, IConfigurationChangeEvent } from 'vs/platform/configuration/common/configuration';
 import { IDisposable, dispose, toDisposable } from 'vs/base/common/lifecycle';
@@ -29,8 +29,7 @@ import { Color } from 'vs/base/common/color';
 import { CenteredViewLayout } from 'vs/base/browser/ui/centered/centeredViewLayout';
 import { IView, orthogonal, LayoutPriority } from 'vs/base/browser/ui/grid/gridview';
 import { onUnexpectedError } from 'vs/base/common/errors';
-import { Parts, IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
-import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
+import { Parts } from 'vs/workbench/services/part/common/partService';
 
 interface IEditorPartUIState {
 	serializedGrid: ISerializedGrid;
@@ -80,12 +79,19 @@ class GridWidgetView<T extends IView> implements IView {
 	}
 }
 
-export class EditorPart extends Part implements IEditorGroupsService, IEditorGroupsAccessor {
+export class EditorPart extends Part implements EditorGroupsServiceImpl, IEditorGroupsAccessor, ISerializableView {
 
-	_serviceBrand: ServiceIdentifier<any>;
+	_serviceBrand: any;
 
 	private static readonly EDITOR_PART_UI_STATE_STORAGE_KEY = 'editorpart.state';
 	private static readonly EDITOR_PART_CENTERED_VIEW_STORAGE_KEY = 'editorpart.centeredview';
+
+	element: HTMLElement;
+
+	private _onDidChange = this._register(new Emitter<{ width: number; height: number; }>());
+	get onDidChange(): Event<{ width: number, height: number }> { return this._onDidChange.event; }
+
+	readonly priority: LayoutPriority = LayoutPriority.High;
 
 	//#region Events
 
@@ -94,9 +100,6 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 
 	private readonly _onDidActiveGroupChange: Emitter<IEditorGroupView> = this._register(new Emitter<IEditorGroupView>());
 	get onDidActiveGroupChange(): Event<IEditorGroupView> { return this._onDidActiveGroupChange.event; }
-
-	private readonly _onDidActivateGroup: Emitter<IEditorGroupView> = this._register(new Emitter<IEditorGroupView>());
-	get onDidActivateGroup(): Event<IEditorGroupView> { return this._onDidActivateGroup.event; }
 
 	private readonly _onDidAddGroup: Emitter<IEditorGroupView> = this._register(new Emitter<IEditorGroupView>());
 	get onDidAddGroup(): Event<IEditorGroupView> { return this._onDidAddGroup.event; }
@@ -113,6 +116,9 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 
 	private readonly _onDidPreferredSizeChange: Emitter<void> = this._register(new Emitter<void>());
 	get onDidPreferredSizeChange(): Event<void> { return this._onDidPreferredSizeChange.event; }
+
+	private readonly _onDidActivateGroup: Emitter<IEditorGroupView> = this._register(new Emitter<IEditorGroupView>());
+	get onDidActivateGroup(): Event<IEditorGroupView> { return this._onDidActivateGroup.event; }
 
 	//#endregion
 
@@ -137,13 +143,14 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 	private whenRestoredResolve: () => void;
 
 	constructor(
+		id: string,
+		private restorePreviousState: boolean,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@IStorageService storageService: IStorageService,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService
+		@IStorageService storageService: IStorageService
 	) {
-		super(Parts.EDITOR_PART, { hasTitle: false }, themeService, storageService, layoutService);
+		super(id, { hasTitle: false }, themeService, storageService);
 
 		this.gridWidgetView = new GridWidgetView<IEditorGroupView>();
 
@@ -746,8 +753,6 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 
 	//#region Part
 
-	readonly priority: LayoutPriority = LayoutPriority.High;
-
 	get minimumWidth(): number { return this.centeredLayoutWidget.minimumWidth; }
 	get maximumWidth(): number { return this.centeredLayoutWidget.maximumWidth; }
 	get minimumHeight(): number { return this.centeredLayoutWidget.minimumHeight; }
@@ -774,7 +779,7 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 		return this.theme.getColor(EDITOR_GROUP_BORDER) || this.theme.getColor(contrastBorder) || Color.transparent;
 	}
 
-	updateStyles(): void {
+	protected updateStyles(): void {
 		this.container.style.backgroundColor = this.getColor(editorBackground);
 
 		const separatorBorderStyle = { separatorBorder: this.gridSeparatorBorder, background: this.theme.getColor(EDITOR_PANE_BACKGROUND) || Color.transparent };
@@ -782,7 +787,7 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 		this.centeredLayoutWidget.styles(separatorBorderStyle);
 	}
 
-	createContentArea(parent: HTMLElement, options?: IEditorPartCreationOptions): HTMLElement {
+	createContentArea(parent: HTMLElement): HTMLElement {
 
 		// Container
 		this.element = parent;
@@ -791,7 +796,7 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 		parent.appendChild(this.container);
 
 		// Grid control with center layout
-		this.doCreateGridControl(options);
+		this.doCreateGridControl();
 
 		this.centeredLayoutWidget = this._register(new CenteredViewLayout(this.container, this.gridWidgetView, this.globalMemento[EditorPart.EDITOR_PART_CENTERED_VIEW_STORAGE_KEY]));
 
@@ -810,10 +815,10 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 		return this.centeredLayoutWidget.isActive();
 	}
 
-	private doCreateGridControl(options?: IEditorPartCreationOptions): void {
+	private doCreateGridControl(): void {
 
 		// Grid Widget (with previous UI state)
-		if (!options || options.restorePreviousState) {
+		if (this.restorePreviousState) {
 			this.doCreateGridControlWithPreviousState();
 		}
 
@@ -953,13 +958,16 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 		return this.groupViews.size === 1 && this._activeGroup.isEmpty();
 	}
 
-	layout(width: number, height: number): void {
+	layout(dimension: Dimension): Dimension[];
+	layout(width: number, height: number): void;
+	layout(dim1: Dimension | number, dim2?: number): Dimension[] | void {
+		const sizes = super.layout(dim1 instanceof Dimension ? dim1 : new Dimension(dim1, dim2));
 
-		// Layout contents
-		const contentAreaSize = super.layoutContents(width, height).contentSize;
+		this.doLayout(sizes[1]);
 
-		// Layout editor container
-		this.doLayout(contentAreaSize);
+		if (dim1 instanceof Dimension) {
+			return sizes;
+		}
 	}
 
 	private doLayout(dimension: Dimension): void {
@@ -1022,5 +1030,3 @@ export class EditorPart extends Part implements IEditorGroupsService, IEditorGro
 		};
 	}
 }
-
-registerSingleton(IEditorGroupsService, EditorPart);

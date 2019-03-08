@@ -20,7 +20,7 @@ export class IndentRangeProvider implements RangeProvider {
 
 	readonly decorations;
 
-	constructor(private readonly editorModel: ITextModel) {
+	constructor(private editorModel: ITextModel) {
 	}
 
 	dispose() {
@@ -36,11 +36,11 @@ export class IndentRangeProvider implements RangeProvider {
 
 // public only for testing
 export class RangesCollector {
-	private readonly _startIndexes: number[];
-	private readonly _endIndexes: number[];
-	private readonly _indentOccurrences: number[];
+	private _startIndexes: number[];
+	private _endIndexes: number[];
+	private _indentOccurrences: number[];
 	private _length: number;
-	private readonly _foldingRangesLimit: number;
+	private _foldingRangesLimit: number;
 
 	constructor(foldingRangesLimit: number) {
 		this._startIndexes = [];

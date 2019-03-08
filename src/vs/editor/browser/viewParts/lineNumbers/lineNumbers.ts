@@ -18,7 +18,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 
 	public static readonly CLASS_NAME = 'line-numbers';
 
-	private readonly _context: ViewContext;
+	private _context: ViewContext;
 
 	private _lineHeight: number;
 	private _renderLineNumbers: RenderLineNumbersType;
@@ -97,7 +97,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		if (modelPosition.column !== 1) {
 			return '';
 		}
-		const modelLineNumber = modelPosition.lineNumber;
+		let modelLineNumber = modelPosition.lineNumber;
 
 		if (!this._renderFinalNewline) {
 			const lineCount = this._context.model.getLineCount();
@@ -113,7 +113,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		}
 
 		if (this._renderLineNumbers === RenderLineNumbersType.Relative) {
-			const diff = Math.abs(this._lastCursorModelPosition.lineNumber - modelLineNumber);
+			let diff = Math.abs(this._lastCursorModelPosition.lineNumber - modelLineNumber);
 			if (diff === 0) {
 				return '<span class="relative-current-line-number">' + modelLineNumber + '</span>';
 			}
@@ -139,16 +139,16 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 			return;
 		}
 
-		const lineHeightClassName = (platform.isLinux ? (this._lineHeight % 2 === 0 ? ' lh-even' : ' lh-odd') : '');
-		const visibleStartLineNumber = ctx.visibleRange.startLineNumber;
-		const visibleEndLineNumber = ctx.visibleRange.endLineNumber;
-		const common = '<div class="' + LineNumbersOverlay.CLASS_NAME + lineHeightClassName + '" style="left:' + this._lineNumbersLeft.toString() + 'px;width:' + this._lineNumbersWidth.toString() + 'px;">';
+		let lineHeightClassName = (platform.isLinux ? (this._lineHeight % 2 === 0 ? ' lh-even' : ' lh-odd') : '');
+		let visibleStartLineNumber = ctx.visibleRange.startLineNumber;
+		let visibleEndLineNumber = ctx.visibleRange.endLineNumber;
+		let common = '<div class="' + LineNumbersOverlay.CLASS_NAME + lineHeightClassName + '" style="left:' + this._lineNumbersLeft.toString() + 'px;width:' + this._lineNumbersWidth.toString() + 'px;">';
 
-		const output: string[] = [];
+		let output: string[] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber++) {
-			const lineIndex = lineNumber - visibleStartLineNumber;
+			let lineIndex = lineNumber - visibleStartLineNumber;
 
-			const renderLineNumber = this._getLineRenderLineNumber(lineNumber);
+			let renderLineNumber = this._getLineRenderLineNumber(lineNumber);
 
 			if (renderLineNumber) {
 				output[lineIndex] = (
@@ -168,7 +168,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		if (!this._renderResult) {
 			return '';
 		}
-		const lineIndex = lineNumber - startLineNumber;
+		let lineIndex = lineNumber - startLineNumber;
 		if (lineIndex < 0 || lineIndex >= this._renderResult.length) {
 			return '';
 		}

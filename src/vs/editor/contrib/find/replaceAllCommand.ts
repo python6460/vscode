@@ -15,10 +15,10 @@ interface IEditOperation {
 
 export class ReplaceAllCommand implements editorCommon.ICommand {
 
-	private readonly _editorSelection: Selection;
+	private _editorSelection: Selection;
 	private _trackedEditorSelectionId: string;
-	private readonly _ranges: Range[];
-	private readonly _replaceStrings: string[];
+	private _ranges: Range[];
+	private _replaceStrings: string[];
 
 	constructor(editorSelection: Selection, ranges: Range[], replaceStrings: string[]) {
 		this._editorSelection = editorSelection;

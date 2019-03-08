@@ -802,10 +802,10 @@ class SelectionHighlighterState {
 export class SelectionHighlighter extends Disposable implements IEditorContribution {
 	private static readonly ID = 'editor.contrib.selectionHighlighter';
 
-	private readonly editor: ICodeEditor;
+	private editor: ICodeEditor;
 	private _isEnabled: boolean;
 	private decorations: string[];
-	private readonly updateSoon: RunOnceScheduler;
+	private updateSoon: RunOnceScheduler;
 	private state: SelectionHighlighterState | null;
 
 	constructor(editor: ICodeEditor) {

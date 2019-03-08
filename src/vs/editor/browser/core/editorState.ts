@@ -29,7 +29,7 @@ export class EditorState {
 		this.flags = flags;
 
 		if ((this.flags & CodeEditorStateFlag.Value) !== 0) {
-			const model = editor.getModel();
+			let model = editor.getModel();
 			this.modelVersionId = model ? strings.format('{0}#{1}', model.uri.toString(), model.getVersionId()) : null;
 		}
 		if ((this.flags & CodeEditorStateFlag.Position) !== 0) {
@@ -49,7 +49,7 @@ export class EditorState {
 		if (!(other instanceof EditorState)) {
 			return false;
 		}
-		const state = <EditorState>other;
+		let state = <EditorState>other;
 
 		if (this.modelVersionId !== state.modelVersionId) {
 			return false;

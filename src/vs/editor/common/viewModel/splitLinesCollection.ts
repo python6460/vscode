@@ -149,7 +149,7 @@ const enum IndentGuideRepeatOption {
 
 export class SplitLinesCollection implements IViewModelLinesCollection {
 
-	private readonly model: ITextModel;
+	private model: ITextModel;
 	private _validModelVersionId: number;
 
 	private wrappingColumn: number;
@@ -160,7 +160,7 @@ export class SplitLinesCollection implements IViewModelLinesCollection {
 
 	private prefixSumComputer: PrefixSumComputerWithCache;
 
-	private readonly linePositionMapperFactory: ILineMapperFactory;
+	private linePositionMapperFactory: ILineMapperFactory;
 
 	private hiddenAreasIds: string[];
 
@@ -1001,11 +1001,11 @@ class InvisibleIdentitySplitLine implements ISplitLine {
 
 export class SplitLine implements ISplitLine {
 
-	private readonly positionMapper: ILineMapping;
-	private readonly outputLineCount: number;
+	private positionMapper: ILineMapping;
+	private outputLineCount: number;
 
-	private readonly wrappedIndent: string;
-	private readonly wrappedIndentLength: number;
+	private wrappedIndent: string;
+	private wrappedIndentLength: number;
 	private _isVisible: boolean;
 
 	constructor(positionMapper: ILineMapping, isVisible: boolean) {

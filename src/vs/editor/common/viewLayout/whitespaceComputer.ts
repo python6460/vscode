@@ -18,27 +18,27 @@ export class WhitespaceComputer {
 	/**
 	 * heights[i] is the height in pixels for whitespace at index i
 	 */
-	private readonly _heights: number[];
+	private _heights: number[];
 
 	/**
 	 * minWidths[i] is the min width in pixels for whitespace at index i
 	 */
-	private readonly _minWidths: number[];
+	private _minWidths: number[];
 
 	/**
 	 * afterLineNumbers[i] is the line number whitespace at index i is after
 	 */
-	private readonly _afterLineNumbers: number[];
+	private _afterLineNumbers: number[];
 
 	/**
 	 * ordinals[i] is the orinal of the whitespace at index i
 	 */
-	private readonly _ordinals: number[];
+	private _ordinals: number[];
 
 	/**
 	 * prefixSum[i] = SUM(heights[j]), 1 <= j <= i
 	 */
-	private readonly _prefixSum: number[];
+	private _prefixSum: number[];
 
 	/**
 	 * prefixSum[i], 1 <= i <= prefixSumValidIndex can be trusted
@@ -48,12 +48,12 @@ export class WhitespaceComputer {
 	/**
 	 * ids[i] is the whitespace id of whitespace at index i
 	 */
-	private readonly _ids: number[];
+	private _ids: number[];
 
 	/**
 	 * index at which a whitespace is positioned (inside heights, afterLineNumbers, prefixSum members)
 	 */
-	private readonly _whitespaceId2Index: {
+	private _whitespaceId2Index: {
 		[id: string]: number;
 	};
 

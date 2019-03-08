@@ -385,4 +385,5 @@ class StorageManager extends Disposable {
 			this.storageService.remove(key, scope);
 		}
 	}
+
 }

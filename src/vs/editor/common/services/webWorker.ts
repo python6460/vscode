@@ -52,7 +52,7 @@ export interface IWebWorkerOptions {
 
 class MonacoWebWorkerImpl<T> extends EditorWorkerClient implements MonacoWebWorker<T> {
 
-	private readonly _foreignModuleId: string;
+	private _foreignModuleId: string;
 	private _foreignModuleCreateData: any | null;
 	private _foreignProxy: Promise<T> | null;
 

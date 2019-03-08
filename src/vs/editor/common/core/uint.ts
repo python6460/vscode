@@ -5,7 +5,7 @@
 
 export class Uint8Matrix {
 
-	private readonly _data: Uint8Array;
+	private _data: Uint8Array;
 	public readonly rows: number;
 	public readonly cols: number;
 

@@ -51,9 +51,4 @@ export interface IWorkspaceEditingService {
 	 * copies current workspace settings to the target workspace.
 	 */
 	copyWorkspaceSettings(toWorkspace: IWorkspaceIdentifier): Promise<void>;
-
-	/**
-	 * picks a new workspace path
-	 */
-	pickNewWorkspacePath(): Promise<URI | undefined>;
 }

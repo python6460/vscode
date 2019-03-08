@@ -35,8 +35,8 @@ export type Edge = [State, number, State];
 
 export class StateMachine {
 
-	private readonly _states: Uint8Matrix;
-	private readonly _maxCharCode: number;
+	private _states: Uint8Matrix;
+	private _maxCharCode: number;
 
 	constructor(edges: Edge[]) {
 		let maxCharCode = 0;

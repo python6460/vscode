@@ -17,8 +17,8 @@ import { getThemeTypeSelector } from 'vs/platform/theme/common/themeService';
 
 export class EditorScrollbar extends ViewPart {
 
-	private readonly scrollbar: SmoothScrollableElement;
-	private readonly scrollbarDomNode: FastDomNode<HTMLElement>;
+	private scrollbar: SmoothScrollableElement;
+	private scrollbarDomNode: FastDomNode<HTMLElement>;
 
 	constructor(
 		context: ViewContext,
@@ -31,7 +31,7 @@ export class EditorScrollbar extends ViewPart {
 		const editor = this._context.configuration.editor;
 		const configScrollbarOpts = editor.viewInfo.scrollbar;
 
-		const scrollbarOptions: ScrollableElementCreationOptions = {
+		let scrollbarOptions: ScrollableElementCreationOptions = {
 			listenOnDomNode: viewDomNode.domNode,
 			className: 'editor-scrollable' + ' ' + getThemeTypeSelector(context.theme.type),
 			useShadows: false,
@@ -62,11 +62,11 @@ export class EditorScrollbar extends ViewPart {
 		// the browser will try desperately to reveal that dom node, unexpectedly
 		// changing the .scrollTop of this.linesContent
 
-		const onBrowserDesperateReveal = (domNode: HTMLElement, lookAtScrollTop: boolean, lookAtScrollLeft: boolean) => {
-			const newScrollPosition: INewScrollPosition = {};
+		let onBrowserDesperateReveal = (domNode: HTMLElement, lookAtScrollTop: boolean, lookAtScrollLeft: boolean) => {
+			let newScrollPosition: INewScrollPosition = {};
 
 			if (lookAtScrollTop) {
-				const deltaTop = domNode.scrollTop;
+				let deltaTop = domNode.scrollTop;
 				if (deltaTop) {
 					newScrollPosition.scrollTop = this._context.viewLayout.getCurrentScrollTop() + deltaTop;
 					domNode.scrollTop = 0;
@@ -74,7 +74,7 @@ export class EditorScrollbar extends ViewPart {
 			}
 
 			if (lookAtScrollLeft) {
-				const deltaLeft = domNode.scrollLeft;
+				let deltaLeft = domNode.scrollLeft;
 				if (deltaLeft) {
 					newScrollPosition.scrollLeft = this._context.viewLayout.getCurrentScrollLeft() + deltaLeft;
 					domNode.scrollLeft = 0;
@@ -126,7 +126,7 @@ export class EditorScrollbar extends ViewPart {
 	public onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
 		if (e.viewInfo) {
 			const editor = this._context.configuration.editor;
-			const newOpts: ScrollableElementChangeOptions = {
+			let newOpts: ScrollableElementChangeOptions = {
 				handleMouseWheel: editor.viewInfo.scrollbar.handleMouseWheel,
 				mouseWheelScrollSensitivity: editor.viewInfo.scrollbar.mouseWheelScrollSensitivity,
 				fastScrollSensitivity: editor.viewInfo.scrollbar.fastScrollSensitivity

@@ -10,7 +10,7 @@ import { ViewContext } from 'vs/editor/common/view/viewContext';
 import * as viewEvents from 'vs/editor/common/view/viewEvents';
 
 export class MarginViewLineDecorationsOverlay extends DedupOverlay {
-	private readonly _context: ViewContext;
+	private _context: ViewContext;
 	private _renderResult: string[] | null;
 
 	constructor(context: ViewContext) {
@@ -56,11 +56,11 @@ export class MarginViewLineDecorationsOverlay extends DedupOverlay {
 	// --- end event handlers
 
 	protected _getDecorations(ctx: RenderingContext): DecorationToRender[] {
-		const decorations = ctx.getDecorationsInViewport();
+		let decorations = ctx.getDecorationsInViewport();
 		let r: DecorationToRender[] = [], rLen = 0;
 		for (let i = 0, len = decorations.length; i < len; i++) {
-			const d = decorations[i];
-			const marginClassName = d.options.marginClassName;
+			let d = decorations[i];
+			let marginClassName = d.options.marginClassName;
 			if (marginClassName) {
 				r[rLen++] = new DecorationToRender(d.range.startLineNumber, d.range.endLineNumber, marginClassName);
 			}
@@ -69,14 +69,14 @@ export class MarginViewLineDecorationsOverlay extends DedupOverlay {
 	}
 
 	public prepareRender(ctx: RenderingContext): void {
-		const visibleStartLineNumber = ctx.visibleRange.startLineNumber;
-		const visibleEndLineNumber = ctx.visibleRange.endLineNumber;
-		const toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
+		let visibleStartLineNumber = ctx.visibleRange.startLineNumber;
+		let visibleEndLineNumber = ctx.visibleRange.endLineNumber;
+		let toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
 
-		const output: string[] = [];
+		let output: string[] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber++) {
-			const lineIndex = lineNumber - visibleStartLineNumber;
-			const classNames = toRender[lineIndex];
+			let lineIndex = lineNumber - visibleStartLineNumber;
+			let classNames = toRender[lineIndex];
 			let lineOutput = '';
 			for (let i = 0, len = classNames.length; i < len; i++) {
 				lineOutput += '<div class="cmdr ' + classNames[i] + '" style=""></div>';

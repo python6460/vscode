@@ -18,7 +18,7 @@ import { IConfigurationService } from 'vs/platform/configuration/common/configur
 import { GlobalNewUntitledFileAction } from 'vs/workbench/contrib/files/browser/fileActions';
 import { OpenFolderAction, OpenFileFolderAction, OpenFileAction } from 'vs/workbench/browser/actions/workspaceActions';
 import { ShowAllCommandsAction } from 'vs/workbench/contrib/quickopen/browser/commandsHandler';
-import { Parts, IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
+import { Parts, IPartService, IDimension } from 'vs/workbench/services/part/common/partService';
 import { StartAction } from 'vs/workbench/contrib/debug/browser/debugActions';
 import { FindInFilesActionId } from 'vs/workbench/contrib/search/common/constants';
 import { QUICKOPEN_ACTION_ID } from 'vs/workbench/browser/parts/quickopen/quickopen';
@@ -27,7 +27,6 @@ import * as dom from 'vs/base/browser/dom';
 import { KeybindingLabel } from 'vs/base/browser/ui/keybindingLabel/keybindingLabel';
 import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { CommandsRegistry } from 'vs/platform/commands/common/commands';
-import { IDimension } from 'vs/platform/layout/browser/layoutService';
 
 const $ = dom.$;
 
@@ -111,7 +110,7 @@ export class WatermarkContribution implements IWorkbenchContribution {
 
 	constructor(
 		@ILifecycleService lifecycleService: ILifecycleService,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IPartService private readonly partService: IPartService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
@@ -148,7 +147,7 @@ export class WatermarkContribution implements IWorkbenchContribution {
 	}
 
 	private create(): void {
-		const container = this.layoutService.getContainer(Parts.EDITOR_PART);
+		const container = this.partService.getContainer(Parts.EDITOR_PART);
 		if (!container) {
 			throw new Error('Could not find container');
 		}
@@ -183,7 +182,7 @@ export class WatermarkContribution implements IWorkbenchContribution {
 	private destroy(): void {
 		if (this.watermark) {
 			this.watermark.remove();
-			const container = this.layoutService.getContainer(Parts.EDITOR_PART);
+			const container = this.partService.getContainer(Parts.EDITOR_PART);
 			if (container) {
 				container.classList.remove('has-watermark');
 			}

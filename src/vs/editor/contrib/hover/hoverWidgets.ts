@@ -16,15 +16,15 @@ import { Range } from 'vs/editor/common/core/range';
 
 export class ContentHoverWidget extends Widget implements editorBrowser.IContentWidget {
 
-	private readonly _id: string;
+	private _id: string;
 	protected _editor: editorBrowser.ICodeEditor;
 	private _isVisible: boolean;
-	private readonly _containerDomNode: HTMLElement;
-	private readonly _domNode: HTMLElement;
+	private _containerDomNode: HTMLElement;
+	private _domNode: HTMLElement;
 	protected _showAtPosition: Position | null;
 	protected _showAtRange: Range | null;
 	private _stoleFocus: boolean;
-	private readonly scrollbar: DomScrollableElement;
+	private scrollbar: DomScrollableElement;
 	private disposables: IDisposable[] = [];
 
 	// Editor.IContentWidget.allowEditorOverflow
@@ -164,10 +164,10 @@ export class ContentHoverWidget extends Widget implements editorBrowser.IContent
 
 export class GlyphHoverWidget extends Widget implements editorBrowser.IOverlayWidget {
 
-	private readonly _id: string;
+	private _id: string;
 	protected _editor: editorBrowser.ICodeEditor;
 	private _isVisible: boolean;
-	private readonly _domNode: HTMLElement;
+	private _domNode: HTMLElement;
 	protected _showAtLineNumber: number;
 
 	constructor(id: string, editor: editorBrowser.ICodeEditor) {

@@ -62,12 +62,12 @@ export class PieceTreeTextBufferFactory implements ITextBufferFactory {
 }
 
 export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
-	private readonly chunks: StringBuffer[];
+	private chunks: StringBuffer[];
 	private BOM: string;
 
 	private _hasPreviousChar: boolean;
 	private _previousChar: number;
-	private readonly _tmpLineStarts: number[];
+	private _tmpLineStarts: number[];
 
 	private cr: number;
 	private lf: number;

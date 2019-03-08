@@ -14,7 +14,7 @@ import { themeColorFromId } from 'vs/platform/theme/common/themeService';
 
 export class FindDecorations implements IDisposable {
 
-	private readonly _editor: IActiveCodeEditor;
+	private _editor: IActiveCodeEditor;
 	private _decorations: string[];
 	private _overviewRulerApproximateDecorations: string[];
 	private _findScopeDecorationId: string | null;

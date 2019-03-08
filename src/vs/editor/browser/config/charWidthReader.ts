@@ -62,12 +62,12 @@ class DomCharWidthReader {
 	}
 
 	private _createDomElements(): void {
-		const container = document.createElement('div');
+		let container = document.createElement('div');
 		container.style.position = 'absolute';
 		container.style.top = '-50000px';
 		container.style.width = '50000px';
 
-		const regularDomNode = document.createElement('div');
+		let regularDomNode = document.createElement('div');
 		regularDomNode.style.fontFamily = this._bareFontInfo.getMassagedFontFamily();
 		regularDomNode.style.fontWeight = this._bareFontInfo.fontWeight;
 		regularDomNode.style.fontSize = this._bareFontInfo.fontSize + 'px';
@@ -75,7 +75,7 @@ class DomCharWidthReader {
 		regularDomNode.style.letterSpacing = this._bareFontInfo.letterSpacing + 'px';
 		container.appendChild(regularDomNode);
 
-		const boldDomNode = document.createElement('div');
+		let boldDomNode = document.createElement('div');
 		boldDomNode.style.fontFamily = this._bareFontInfo.getMassagedFontFamily();
 		boldDomNode.style.fontWeight = 'bold';
 		boldDomNode.style.fontSize = this._bareFontInfo.fontSize + 'px';
@@ -83,7 +83,7 @@ class DomCharWidthReader {
 		boldDomNode.style.letterSpacing = this._bareFontInfo.letterSpacing + 'px';
 		container.appendChild(boldDomNode);
 
-		const italicDomNode = document.createElement('div');
+		let italicDomNode = document.createElement('div');
 		italicDomNode.style.fontFamily = this._bareFontInfo.getMassagedFontFamily();
 		italicDomNode.style.fontWeight = this._bareFontInfo.fontWeight;
 		italicDomNode.style.fontSize = this._bareFontInfo.fontSize + 'px';
@@ -92,7 +92,7 @@ class DomCharWidthReader {
 		italicDomNode.style.fontStyle = 'italic';
 		container.appendChild(italicDomNode);
 
-		const testElements: HTMLSpanElement[] = [];
+		let testElements: HTMLSpanElement[] = [];
 		for (let i = 0, len = this._requests.length; i < len; i++) {
 			const request = this._requests[i];
 
@@ -109,7 +109,7 @@ class DomCharWidthReader {
 
 			parent!.appendChild(document.createElement('br'));
 
-			const testElement = document.createElement('span');
+			let testElement = document.createElement('span');
 			DomCharWidthReader._render(testElement, request);
 			parent!.appendChild(testElement);
 
@@ -149,6 +149,6 @@ class DomCharWidthReader {
 }
 
 export function readCharWidths(bareFontInfo: BareFontInfo, requests: CharWidthRequest[]): void {
-	const reader = new DomCharWidthReader(bareFontInfo, requests);
+	let reader = new DomCharWidthReader(bareFontInfo, requests);
 	reader.read();
 }

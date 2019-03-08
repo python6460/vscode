@@ -8,30 +8,13 @@ import { Part } from 'vs/workbench/browser/part';
 import * as Types from 'vs/base/common/types';
 import { TestThemeService } from 'vs/platform/theme/test/common/testThemeService';
 import { append, $, hide } from 'vs/base/browser/dom';
-import { TestStorageService, TestLayoutService } from 'vs/workbench/test/workbenchTestServices';
+import { TestStorageService } from 'vs/workbench/test/workbenchTestServices';
 import { StorageScope } from 'vs/platform/storage/common/storage';
-import { Orientation } from 'vs/base/browser/ui/grid/grid';
 
-class SimplePart extends Part {
-
-	minimumWidth: number;
-	maximumWidth: number;
-	minimumHeight: number;
-	maximumHeight: number;
-
-	layout(width: number, height: number, orientation: Orientation): void {
-		throw new Error('Method not implemented.');
-	}
-
-	toJSON(): object {
-		throw new Error('Method not implemented.');
-	}
-}
-
-class MyPart extends SimplePart {
+class MyPart extends Part {
 
 	constructor(private expectedParent: HTMLElement) {
-		super('myPart', { hasTitle: true }, new TestThemeService(), new TestStorageService(), new TestLayoutService());
+		super('myPart', { hasTitle: true }, new TestThemeService(), new TestStorageService());
 	}
 
 	createTitleArea(parent: HTMLElement): HTMLElement {
@@ -53,10 +36,10 @@ class MyPart extends SimplePart {
 	}
 }
 
-class MyPart2 extends SimplePart {
+class MyPart2 extends Part {
 
 	constructor() {
-		super('myPart2', { hasTitle: true }, new TestThemeService(), new TestStorageService(), new TestLayoutService());
+		super('myPart2', { hasTitle: true }, new TestThemeService(), new TestStorageService());
 	}
 
 	createTitleArea(parent: HTMLElement): HTMLElement {
@@ -78,10 +61,10 @@ class MyPart2 extends SimplePart {
 	}
 }
 
-class MyPart3 extends SimplePart {
+class MyPart3 extends Part {
 
 	constructor() {
-		super('myPart2', { hasTitle: false }, new TestThemeService(), new TestStorageService(), new TestLayoutService());
+		super('myPart2', { hasTitle: false }, new TestThemeService(), new TestStorageService());
 	}
 
 	createTitleArea(parent: HTMLElement): HTMLElement {

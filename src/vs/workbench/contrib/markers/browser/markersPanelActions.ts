@@ -13,7 +13,7 @@ import { IContextViewService, IContextMenuService } from 'vs/platform/contextvie
 import { TogglePanelAction } from 'vs/workbench/browser/panel';
 import Messages from 'vs/workbench/contrib/markers/browser/messages';
 import Constants from 'vs/workbench/contrib/markers/browser/constants';
-import { IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
+import { IPartService } from 'vs/workbench/services/part/common/partService';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { attachInputBoxStyler, attachStylerCallback, attachCheckboxStyler } from 'vs/platform/theme/common/styler';
@@ -37,11 +37,11 @@ export class ToggleMarkersPanelAction extends TogglePanelAction {
 	public static readonly LABEL = Messages.MARKERS_PANEL_TOGGLE_LABEL;
 
 	constructor(id: string, label: string,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@IPartService partService: IPartService,
 		@IPanelService panelService: IPanelService,
 		@IMarkersWorkbenchService markersWorkbenchService: IMarkersWorkbenchService
 	) {
-		super(id, label, Constants.MARKERS_PANEL_ID, panelService, layoutService);
+		super(id, label, Constants.MARKERS_PANEL_ID, panelService, partService);
 	}
 }
 

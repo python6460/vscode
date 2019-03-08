@@ -16,7 +16,7 @@ import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegis
 
 abstract class CommentLineAction extends EditorAction {
 
-	private readonly _type: Type;
+	private _type: Type;
 
 	constructor(type: Type, opts: IActionOptions) {
 		super(opts);
