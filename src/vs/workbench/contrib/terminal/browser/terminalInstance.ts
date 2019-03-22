@@ -430,7 +430,7 @@ export class TerminalInstance implements ITerminalInstance {
 			this._processManager.onProcessData(data => this._onProcessData(data));
 			this._xterm.on('data', data => this._processManager!.write(data));
 			// TODO: How does the cwd work on detached processes?
-			this._linkHandler = this._instantiationService.createInstance(TerminalLinkHandler, this._xterm, platform.platform);
+			this._linkHandler = this._instantiationService.createInstance(TerminalLinkHandler, this._xterm, platform.platform, this._processManager);
 			this.processReady.then(async () => {
 				this._linkHandler.processCwd = await this._processManager!.getInitialCwd();
 			});
@@ -577,10 +577,6 @@ export class TerminalInstance implements ITerminalInstance {
 
 			if (this._processManager) {
 				this._widgetManager = new TerminalWidgetManager(this._wrapperElement);
-				// HACK: This can be removed once this is fixed upstream xtermjs/xterm.js#1908
-				this._disposables.push(dom.addDisposableListener(this._xterm.element, 'mouseleave', () => {
-					this._widgetManager.closeMessage();
-				}));
 				this._linkHandler.setWidgetManager(this._widgetManager);
 			}
 
@@ -766,7 +762,11 @@ export class TerminalInstance implements ITerminalInstance {
 		if (!this._xterm) {
 			return;
 		}
-		const text = window.getSelection().toString();
+		const selection = window.getSelection();
+		if (!selection) {
+			return;
+		}
+		const text = selection.toString();
 		if (!text || force) {
 			this._xterm.focus();
 		}
@@ -893,9 +893,12 @@ export class TerminalInstance implements ITerminalInstance {
 
 		if (platform.isWindows) {
 			this._processManager.ptyProcessReady.then(() => {
+				if (this._processManager!.remoteAuthority) {
+					return;
+				}
 				this._xtermReadyPromise.then(() => {
 					if (!this._isDisposed) {
-						this._terminalInstanceService.createWindowsShellHelper(this._processManager!.shellProcessId, this, this._xterm);
+						this._windowsShellHelper = this._terminalInstanceService.createWindowsShellHelper(this._processManager!.shellProcessId, this, this._xterm);
 					}
 				});
 			});

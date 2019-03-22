@@ -42,7 +42,6 @@ import { IProgressRunner, IProgressService } from 'vs/platform/progress/common/p
 import { ITelemetryInfo, ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IWorkspace, IWorkspaceContextService, IWorkspaceFolder, IWorkspaceFoldersChangeEvent, WorkbenchState, WorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 import { ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from 'vs/platform/workspaces/common/workspaces';
-import { IAccessibilityService, AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
 import { ILayoutService, IDimension } from 'vs/platform/layout/browser/layoutService';
 
 export class SimpleModel implements IResolvedTextEditorModel {
@@ -218,31 +217,6 @@ export class SimpleNotificationService implements INotificationService {
 	}
 }
 
-export class BrowserAccessibilityService implements IAccessibilityService {
-	_serviceBrand: any;
-
-	private _accessibilitySupport = AccessibilitySupport.Unknown;
-	private readonly _onDidChangeAccessibilitySupport = new Emitter<void>();
-	readonly onDidChangeAccessibilitySupport: Event<void> = this._onDidChangeAccessibilitySupport.event;
-
-	alwaysUnderlineAccessKeys(): Promise<boolean> {
-		return Promise.resolve(false);
-	}
-
-	setAccessibilitySupport(accessibilitySupport: AccessibilitySupport): void {
-		if (this._accessibilitySupport === accessibilitySupport) {
-			return;
-		}
-
-		this._accessibilitySupport = accessibilitySupport;
-		this._onDidChangeAccessibilitySupport.fire();
-	}
-
-	getAccessibilitySupport(): AccessibilitySupport {
-		return this._accessibilitySupport;
-	}
-}
-
 export class StandaloneCommandService implements ICommandService {
 	_serviceBrand: any;
 
@@ -306,7 +280,7 @@ export class StandaloneKeybindingService extends AbstractKeybindingService {
 		}));
 	}
 
-	public addDynamicKeybinding(commandId: string, _keybinding: number, handler: ICommandHandler, when: ContextKeyExpr | null): IDisposable {
+	public addDynamicKeybinding(commandId: string, _keybinding: number, handler: ICommandHandler, when: ContextKeyExpr | undefined): IDisposable {
 		const keybinding = createKeybinding(_keybinding, OS);
 		if (!keybinding) {
 			throw new Error(`Invalid keybinding`);
@@ -368,7 +342,7 @@ export class StandaloneKeybindingService extends AbstractKeybindingService {
 	private _toNormalizedKeybindingItems(items: IKeybindingItem[], isDefault: boolean): ResolvedKeybindingItem[] {
 		let result: ResolvedKeybindingItem[] = [], resultLen = 0;
 		for (const item of items) {
-			const when = (item.when ? item.when.normalize() : null);
+			const when = (item.when ? item.when.normalize() : undefined);
 			const keybinding = item.keybinding;
 
 			if (!keybinding) {
@@ -686,4 +660,10 @@ export class SimpleLayoutService implements ILayoutService {
 
 		return this._dimension;
 	}
+
+	get container(): HTMLElement {
+		return this._container;
+	}
+
+	constructor(private _container: HTMLElement) { }
 }

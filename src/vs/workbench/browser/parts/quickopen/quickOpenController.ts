@@ -481,7 +481,7 @@ export class QuickOpenController extends Component implements IQuickOpenService 
 
 					// merge history and default handler results
 					const handlerResults = (result && result.entries) || [];
-					this.mergeResults(quickOpenModel, handlerResults, resolvedHandler.getGroupLabel() || undefined);
+					this.mergeResults(quickOpenModel, handlerResults, types.withNullAsUndefined(resolvedHandler.getGroupLabel()));
 				}
 			});
 		});
@@ -528,7 +528,7 @@ export class QuickOpenController extends Component implements IQuickOpenService 
 				const placeHolderLabel = (typeof canRun === 'string') ? canRun : nls.localize('canNotRunPlaceholder', "This quick open handler can not be used in the current context");
 
 				const model = new QuickOpenModel([new PlaceholderQuickOpenEntry(placeHolderLabel)], this.actionProvider);
-				this.showModel(model, resolvedHandler.getAutoFocus(value, { model, quickNavigateConfiguration: this.quickOpenWidget.getQuickNavigateConfiguration() }), resolvedHandler.getAriaLabel() || undefined);
+				this.showModel(model, resolvedHandler.getAutoFocus(value, { model, quickNavigateConfiguration: this.quickOpenWidget.getQuickNavigateConfiguration() }), types.withNullAsUndefined(resolvedHandler.getAriaLabel()));
 
 				return Promise.resolve(undefined);
 			}
@@ -549,9 +549,9 @@ export class QuickOpenController extends Component implements IQuickOpenService 
 				if (!token.isCancellationRequested) {
 					if (!result || !result.entries.length) {
 						const model = new QuickOpenModel([new PlaceholderQuickOpenEntry(resolvedHandler.getEmptyLabel(value))]);
-						this.showModel(model, resolvedHandler.getAutoFocus(value, { model, quickNavigateConfiguration: this.quickOpenWidget.getQuickNavigateConfiguration() }), resolvedHandler.getAriaLabel() || undefined);
+						this.showModel(model, resolvedHandler.getAutoFocus(value, { model, quickNavigateConfiguration: this.quickOpenWidget.getQuickNavigateConfiguration() }), types.withNullAsUndefined(resolvedHandler.getAriaLabel()));
 					} else {
-						this.showModel(result, resolvedHandler.getAutoFocus(value, { model: result, quickNavigateConfiguration: this.quickOpenWidget.getQuickNavigateConfiguration() }), resolvedHandler.getAriaLabel() || undefined);
+						this.showModel(result, resolvedHandler.getAutoFocus(value, { model: result, quickNavigateConfiguration: this.quickOpenWidget.getQuickNavigateConfiguration() }), types.withNullAsUndefined(resolvedHandler.getAriaLabel()));
 					}
 				}
 			});
@@ -783,7 +783,7 @@ export class EditorHistoryEntry extends EditorQuickOpenEntry {
 	}
 
 	getResource(): URI | null {
-		return this.resource || null;
+		return types.withUndefinedAsNull(this.resource);
 	}
 
 	getInput(): IEditorInput | IResourceInput {
@@ -848,7 +848,7 @@ export class RemoveFromEditorHistoryAction extends Action {
 
 			return <IHistoryPickEntry>{
 				input: h,
-				iconClasses: getIconClasses(this.modelService, this.modeService, entry.getResource() || undefined),
+				iconClasses: getIconClasses(this.modelService, this.modeService, types.withNullAsUndefined(entry.getResource())),
 				label: entry.getLabel(),
 				description: entry.getDescription()
 			};

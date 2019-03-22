@@ -637,20 +637,24 @@ export interface ITerminalProcessManager extends IDisposable {
 	readonly processState: ProcessState;
 	readonly ptyProcessReady: Promise<void>;
 	readonly shellProcessId: number;
+	readonly remoteAuthority: string | undefined;
+	readonly os: platform.OperatingSystem | undefined;
+	readonly userHome: string | undefined;
 
 	readonly onProcessReady: Event<void>;
 	readonly onProcessData: Event<string>;
 	readonly onProcessTitle: Event<string>;
 	readonly onProcessExit: Event<number>;
 
-	addDisposable(disposable: IDisposable);
-	dispose(immediate?: boolean);
-	createProcess(shellLaunchConfig: IShellLaunchConfig, cols: number, rows: number);
+	addDisposable(disposable: IDisposable): void;
+	dispose(immediate?: boolean): void;
+	createProcess(shellLaunchConfig: IShellLaunchConfig, cols: number, rows: number): void;
 	write(data: string): void;
 	setDimensions(cols: number, rows: number): void;
 
 	getInitialCwd(): Promise<string>;
 	getCwd(): Promise<string>;
+	getLatency(): Promise<number>;
 }
 
 export const enum ProcessState {
@@ -682,12 +686,14 @@ export interface ITerminalProcessExtHostProxy extends IDisposable {
 	emitExit(exitCode: number): void;
 	emitInitialCwd(initialCwd: string): void;
 	emitCwd(cwd: string): void;
+	emitLatency(latency: number): void;
 
 	onInput: Event<string>;
 	onResize: Event<{ cols: number, rows: number }>;
 	onShutdown: Event<boolean>;
 	onRequestInitialCwd: Event<void>;
 	onRequestCwd: Event<void>;
+	onRequestLatency: Event<void>;
 }
 
 export interface ITerminalProcessExtHostRequest {
@@ -730,4 +736,5 @@ export interface ITerminalChildProcess {
 
 	getInitialCwd(): Promise<string>;
 	getCwd(): Promise<string>;
+	getLatency(): Promise<number>;
 }

@@ -66,7 +66,7 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 
 	private channels: Map<string, OutputChannel> = new Map<string, OutputChannel>();
 	private activeChannelIdInStorage: string;
-	private activeChannel: OutputChannel | null;
+	private activeChannel?: OutputChannel;
 
 	private readonly _onActiveOutputChannel = new Emitter<string>();
 	readonly onActiveOutputChannel: Event<string> = this._onActiveOutputChannel.event;
@@ -105,7 +105,7 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		// Set active channel to first channel if not set
 		if (!this.activeChannel) {
 			const channels = this.getChannelDescriptors();
-			this.activeChannel = channels && channels.length > 0 ? this.getChannel(channels[0].id) : null;
+			this.activeChannel = channels && channels.length > 0 ? this.getChannel(channels[0].id) : undefined;
 		}
 
 		this._register(this.lifecycleService.onShutdown(() => this.dispose()));
@@ -140,22 +140,22 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		return promise.then(() => this._onActiveOutputChannel.fire(id));
 	}
 
-	getChannel(id: string): OutputChannel | null {
-		return this.channels.get(id) || null;
+	getChannel(id: string): OutputChannel | undefined {
+		return this.channels.get(id);
 	}
 
 	getChannelDescriptors(): IOutputChannelDescriptor[] {
 		return Registry.as<IOutputChannelRegistry>(Extensions.OutputChannels).getChannels();
 	}
 
-	getActiveChannel(): IOutputChannel | null {
+	getActiveChannel(): IOutputChannel | undefined {
 		return this.activeChannel;
 	}
 
 	private onDidRegisterChannel(channelId: string): void {
 		const channel = this.createChannel(channelId);
 		this.channels.set(channelId, channel);
-		if (this.activeChannelIdInStorage === channelId) {
+		if (!this.activeChannel || this.activeChannelIdInStorage === channelId) {
 			this.activeChannel = channel;
 			this.onDidPanelOpen(this.panelService.getActivePanel(), true)
 				.then(() => this._onActiveOutputChannel.fire(channelId));
@@ -194,7 +194,7 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		channel.model.onDispose(() => {
 			if (this.activeChannel === channel) {
 				const channels = this.getChannelDescriptors();
-				const channel = channels.length ? this.getChannel(channels[0].id) : null;
+				const channel = channels.length ? this.getChannel(channels[0].id) : undefined;
 				if (channel && this.isPanelShown()) {
 					this.showChannel(channel.id, true);
 				} else {

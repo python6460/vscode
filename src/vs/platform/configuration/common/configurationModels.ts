@@ -453,7 +453,7 @@ export class Configuration {
 		if (workspace && resource) {
 			const root = workspace.getFolder(resource);
 			if (root) {
-				return this._folderConfigurations.get(root.uri) || null;
+				return types.withUndefinedAsNull(this._folderConfigurations.get(root.uri));
 			}
 		}
 		return null;
@@ -485,10 +485,10 @@ export class Configuration {
 		};
 	}
 
-	allKeys(workspace: Workspace): string[] {
+	allKeys(workspace: Workspace | undefined): string[] {
 		let keys = this.keys(workspace);
 		let all = [...keys.default];
-		const addKeys = (keys) => {
+		const addKeys = (keys: string[]) => {
 			for (const key of keys) {
 				if (all.indexOf(key) === -1) {
 					all.push(key);
