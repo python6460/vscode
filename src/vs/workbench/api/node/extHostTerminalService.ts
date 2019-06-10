@@ -114,9 +114,10 @@ export class ExtHostTerminal extends BaseExtHostTerminal implements vscode.Termi
 		cwd?: string | URI,
 		env?: { [key: string]: string | null },
 		waitOnExit?: boolean,
-		strictEnv?: boolean
+		strictEnv?: boolean,
+		runInBackground?: boolean
 	): void {
-		this._proxy.$createTerminal(this._name, shellPath, shellArgs, cwd, env, waitOnExit, strictEnv).then(terminal => {
+		this._proxy.$createTerminal(this._name, shellPath, shellArgs, cwd, env, waitOnExit, strictEnv, runInBackground).then(terminal => {
 			this._name = terminal.name;
 			this._runQueuedRequests(terminal.id);
 		});
@@ -175,7 +176,7 @@ export class ExtHostTerminal extends BaseExtHostTerminal implements vscode.Termi
 			this._pidPromiseComplete(processId);
 			this._pidPromiseComplete = null;
 		} else {
-			// Recreate the promise if this is the nth processId set (eg. reused task terminals)
+			// Recreate the promise if this is the nth processId set (e.g. reused task terminals)
 			this._pidPromise.then(pid => {
 				if (pid !== processId) {
 					this._pidPromise = Promise.resolve(processId);
@@ -308,7 +309,7 @@ export class ExtHostTerminalService implements ExtHostTerminalServiceShape {
 
 	public createTerminalFromOptions(options: vscode.TerminalOptions): vscode.Terminal {
 		const terminal = new ExtHostTerminal(this._proxy, options.name);
-		terminal.create(options.shellPath, options.shellArgs, options.cwd, options.env, /*options.waitOnExit*/ undefined, options.strictEnv);
+		terminal.create(options.shellPath, options.shellArgs, options.cwd, options.env, /*options.waitOnExit*/ undefined, options.strictEnv, options.runInBackground);
 		this._terminals.push(terminal);
 		return terminal;
 	}
@@ -504,7 +505,7 @@ export class ExtHostTerminalService implements ExtHostTerminalServiceShape {
 
 		// Fork the process and listen for messages
 		this._logService.debug(`Terminal process launching on ext host`, shellLaunchConfig, initialCwd, cols, rows, env);
-		const p = new TerminalProcess(shellLaunchConfig, initialCwd, cols, rows, env, terminalConfig.get('windowsEnableConpty') as boolean);
+		const p = new TerminalProcess(shellLaunchConfig, initialCwd, cols, rows, env, terminalConfig.get('windowsEnableConpty') as boolean, this._logService);
 		p.onProcessIdReady(pid => this._proxy.$sendProcessPid(id, pid));
 		p.onProcessTitleChanged(title => this._proxy.$sendProcessTitle(id, title));
 		p.onProcessData(data => this._proxy.$sendProcessData(id, data));

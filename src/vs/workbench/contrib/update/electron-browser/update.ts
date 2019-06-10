@@ -6,7 +6,7 @@
 import * as nls from 'vs/nls';
 import severity from 'vs/base/common/severity';
 import { IAction, Action } from 'vs/base/common/actions';
-import { IDisposable, dispose, Disposable } from 'vs/base/common/lifecycle';
+import { IDisposable, Disposable } from 'vs/base/common/lifecycle';
 import { Separator } from 'vs/base/browser/ui/actionbar/actionbar';
 import pkg from 'vs/platform/product/node/package';
 import product from 'vs/platform/product/node/product';
@@ -212,53 +212,6 @@ export class Win3264BitContribution implements IWorkbenchContribution {
 	}
 }
 
-export class Linux32BitContribution implements IWorkbenchContribution {
-
-	private static readonly KEY = 'update/linux32-64bits';
-	private static readonly URL = 'https://code.visualstudio.com/updates/v1_32#_linux-32-bit-support-ends-soon';
-	private static readonly INSIDER_URL = 'https://github.com/Microsoft/vscode-docs/blob/vnext/release-notes/v1_32.md#linux-32-bit-support-ends-soon';
-
-	constructor(
-		@IStorageService storageService: IStorageService,
-		@INotificationService notificationService: INotificationService,
-		@IEnvironmentService environmentService: IEnvironmentService
-	) {
-		if (environmentService.disableUpdates) {
-			return;
-		}
-
-		const neverShowAgain = new NeverShowAgain(Linux32BitContribution.KEY, storageService);
-
-		if (!neverShowAgain.shouldShow()) {
-			return;
-		}
-
-		const url = product.quality === 'insider'
-			? Linux32BitContribution.INSIDER_URL
-			: Linux32BitContribution.URL;
-
-		const handle = notificationService.prompt(
-			severity.Info,
-			nls.localize('linux64bits', "{0} for 32-bit Linux will soon be discontinued. Please update to the 64-bit version.", product.nameShort, url),
-			[{
-				label: nls.localize('learnmore', "Learn More"),
-				run: () => {
-					window.open(url);
-				}
-			},
-			{
-				label: nls.localize('neveragain', "Don't Show Again"),
-				isSecondary: true,
-				run: () => {
-					neverShowAgain.action.run(handle);
-					neverShowAgain.action.dispose();
-				}
-			}],
-			{ sticky: true }
-		);
-	}
-}
-
 class CommandAction extends Action {
 
 	constructor(
@@ -270,7 +223,7 @@ class CommandAction extends Action {
 	}
 }
 
-export class UpdateContribution implements IGlobalActivity {
+export class UpdateContribution extends Disposable implements IGlobalActivity {
 
 	private static readonly showCommandsId = 'workbench.action.showCommands';
 	private static readonly openSettingsId = 'workbench.action.openSettings';
@@ -286,7 +239,6 @@ export class UpdateContribution implements IGlobalActivity {
 
 	private state: UpdateState;
 	private badgeDisposable: IDisposable = Disposable.None;
-	private disposables: IDisposable[] = [];
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
@@ -298,9 +250,10 @@ export class UpdateContribution implements IGlobalActivity {
 		@IActivityService private readonly activityService: IActivityService,
 		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService
 	) {
+		super();
 		this.state = updateService.state;
 
-		updateService.onStateChange(this.onUpdateStateChange, this, this.disposables);
+		this._register(updateService.onStateChange(this.onUpdateStateChange, this));
 		this.onUpdateStateChange(this.updateService.state);
 
 		/*
@@ -574,9 +527,5 @@ export class UpdateContribution implements IGlobalActivity {
 				return new Action('update.restart', nls.localize('restartToUpdate', "Restart to Update"), undefined, true, () =>
 					this.updateService.quitAndInstall());
 		}
-	}
-
-	dispose(): void {
-		this.disposables = dispose(this.disposables);
 	}
 }

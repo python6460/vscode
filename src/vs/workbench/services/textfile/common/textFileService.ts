@@ -443,7 +443,7 @@ export abstract class TextFileService extends Disposable implements ITextFileSer
 		return this.fileService.del(resource, options);
 	}
 
-	async move(source: URI, target: URI, overwrite?: boolean): Promise<void> {
+	async move(source: URI, target: URI, overwrite?: boolean): Promise<IFileStatWithMetadata> {
 		const waitForPromises: Promise<unknown>[] = [];
 
 		// Event
@@ -498,10 +498,12 @@ export abstract class TextFileService extends Disposable implements ITextFileSer
 
 		// Rename to target
 		try {
-			await this.fileService.move(source, target, overwrite);
+			const stat = await this.fileService.move(source, target, overwrite);
 
 			// Load models that were dirty before
 			await Promise.all(dirtyTargetModelUris.map(dirtyTargetModel => this.models.loadOrCreate(dirtyTargetModel)));
+
+			return stat;
 		} catch (error) {
 
 			// In case of an error, discard any dirty target backups that were made
@@ -740,14 +742,14 @@ export abstract class TextFileService extends Disposable implements ITextFileSer
 	private getFileModels(arg1?: URI | URI[]): ITextFileEditorModel[] {
 		if (Array.isArray(arg1)) {
 			const models: ITextFileEditorModel[] = [];
-			(<URI[]>arg1).forEach(resource => {
+			arg1.forEach(resource => {
 				models.push(...this.getFileModels(resource));
 			});
 
 			return models;
 		}
 
-		return this._models.getAll(<URI>arg1);
+		return this._models.getAll(arg1);
 	}
 
 	private getDirtyFileModels(resources?: URI | URI[]): ITextFileEditorModel[] {

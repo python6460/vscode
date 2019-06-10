@@ -44,6 +44,7 @@ import { TestBackupFileService, TestContextService, TestEditorGroupsService, Tes
 import { FileService } from 'vs/workbench/services/files/common/fileService';
 import { Schemas } from 'vs/base/common/network';
 import { DiskFileSystemProvider } from 'vs/workbench/services/files/node/diskFileSystemProvider';
+import { URI } from 'vs/base/common/uri';
 
 interface Modifiers {
 	metaKey?: boolean;
@@ -65,7 +66,7 @@ suite('KeybindingsEditing', () => {
 
 			instantiationService = new TestInstantiationService();
 
-			instantiationService.stub(IEnvironmentService, <IEnvironmentService>{ appKeybindingsPath: keybindingsFile, appSettingsPath: path.join(testDir, 'settings.json') });
+			instantiationService.stub(IEnvironmentService, <IEnvironmentService>{ appKeybindingsPath: keybindingsFile, settingsResource: URI.file(path.join(testDir, 'settings.json')) });
 			instantiationService.stub(IConfigurationService, ConfigurationService);
 			instantiationService.stub(IConfigurationService, 'getValue', { 'eol': '\n' });
 			instantiationService.stub(IConfigurationService, 'onDidUpdateConfiguration', () => { });
@@ -274,7 +275,7 @@ suite('KeybindingsEditing', () => {
 				parts.push(aSimpleKeybinding(chordPart));
 			}
 		}
-		let keybinding = parts.length > 0 ? new USLayoutResolvedKeybinding(new ChordKeybinding(parts), OS) : null;
+		const keybinding = parts.length > 0 ? new USLayoutResolvedKeybinding(new ChordKeybinding(parts), OS) : undefined;
 		return new ResolvedKeybindingItem(keybinding, command || 'some command', null, when ? ContextKeyExpr.deserialize(when) : undefined, isDefault === undefined ? true : isDefault);
 	}
 
