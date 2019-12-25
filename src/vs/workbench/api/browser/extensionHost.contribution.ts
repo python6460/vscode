@@ -11,6 +11,7 @@ import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
 // --- other interested parties
 import { JSONValidationExtensionPoint } from 'vs/workbench/api/common/jsonValidationExtensionPoint';
 import { ColorExtensionPoint } from 'vs/workbench/services/themes/common/colorExtensionPoint';
+import { TokenClassificationExtensionPoints } from 'vs/workbench/services/themes/common/tokenClassificationExtensionPoint';
 import { LanguageConfigurationFileHandler } from 'vs/workbench/contrib/codeEditor/browser/languageConfigurationExtensionPoint';
 
 // --- mainThread participants
@@ -32,7 +33,6 @@ import './mainThreadErrors';
 import './mainThreadExtensionService';
 import './mainThreadFileSystem';
 import './mainThreadFileSystemEventService';
-import './mainThreadHeapService';
 import './mainThreadKeytar';
 import './mainThreadLanguageFeatures';
 import './mainThreadLanguages';
@@ -48,13 +48,17 @@ import './mainThreadStatusBar';
 import './mainThreadStorage';
 import './mainThreadTelemetry';
 import './mainThreadTerminalService';
+import './mainThreadTheming';
 import './mainThreadTreeViews';
+import './mainThreadDownloadService';
 import './mainThreadUrls';
 import './mainThreadWindow';
 import './mainThreadWebview';
 import './mainThreadWorkspace';
 import './mainThreadComments';
 import './mainThreadTask';
+import './mainThreadLabelService';
+import './mainThreadTunnelService';
 import 'vs/workbench/api/common/apiCommands';
 
 export class ExtensionPoints implements IWorkbenchContribution {
@@ -65,6 +69,7 @@ export class ExtensionPoints implements IWorkbenchContribution {
 		// Classes that handle extension points...
 		this.instantiationService.createInstance(JSONValidationExtensionPoint);
 		this.instantiationService.createInstance(ColorExtensionPoint);
+		this.instantiationService.createInstance(TokenClassificationExtensionPoints);
 		this.instantiationService.createInstance(LanguageConfigurationFileHandler);
 	}
 }

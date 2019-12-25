@@ -13,115 +13,34 @@ import { WebviewEditor } from 'vs/workbench/contrib/webview/browser/webviewEdito
 export class ShowWebViewEditorFindWidgetCommand extends Command {
 	public static readonly ID = 'editor.action.webvieweditor.showFind';
 
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.showFind();
-		}
+	public runCommand(accessor: ServicesAccessor): void {
+		getActiveWebviewEditor(accessor)?.showFind();
 	}
 }
 
 export class HideWebViewEditorFindCommand extends Command {
 	public static readonly ID = 'editor.action.webvieweditor.hideFind';
 
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.hideFind();
-		}
+	public runCommand(accessor: ServicesAccessor): void {
+		getActiveWebviewEditor(accessor)?.hideFind();
 	}
 }
 
-export class SelectAllWebviewEditorCommand extends Command {
-	public static readonly ID = 'editor.action.webvieweditor.selectAll';
+export class WebViewEditorFindNextCommand extends Command {
+	public static readonly ID = 'editor.action.webvieweditor.findNext';
 
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.selectAll();
-		}
+	public runCommand(accessor: ServicesAccessor): void {
+		getActiveWebviewEditor(accessor)?.find(false);
 	}
 }
 
-export class CopyWebviewEditorCommand extends Command {
-	public static readonly ID = 'editor.action.webvieweditor.copy';
+export class WebViewEditorFindPreviousCommand extends Command {
+	public static readonly ID = 'editor.action.webvieweditor.findPrevious';
 
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.copy();
-		}
+	public runCommand(accessor: ServicesAccessor): void {
+		getActiveWebviewEditor(accessor)?.find(true);
 	}
 }
-
-export class PasteWebviewEditorCommand extends Command {
-	public static readonly ID = 'editor.action.webvieweditor.paste';
-
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.paste();
-		}
-	}
-}
-
-export class CutWebviewEditorCommand extends Command {
-	public static readonly ID = 'editor.action.webvieweditor.cut';
-
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.cut();
-		}
-	}
-}
-
-export class UndoWebviewEditorCommand extends Command {
-	public static readonly ID = 'editor.action.webvieweditor.undo';
-
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.undo();
-		}
-	}
-}
-
-export class RedoWebviewEditorCommand extends Command {
-	public static readonly ID = 'editor.action.webvieweditor.redo';
-
-	public runCommand(accessor: ServicesAccessor, args: any): void {
-		const webViewEditor = getActiveWebviewEditor(accessor);
-		if (webViewEditor) {
-			webViewEditor.redo();
-		}
-	}
-}
-
-export class OpenWebviewDeveloperToolsAction extends Action {
-	static readonly ID = 'workbench.action.webview.openDeveloperTools';
-	static readonly LABEL = nls.localize('openToolsLabel', "Open Webview Developer Tools");
-
-	public constructor(
-		id: string,
-		label: string
-	) {
-		super(id, label);
-	}
-
-	public run(): Promise<any> {
-		const elements = document.querySelectorAll('webview.ready');
-		for (let i = 0; i < elements.length; i++) {
-			try {
-				(elements.item(i) as Electron.WebviewTag).openDevTools();
-			} catch (e) {
-				console.error(e);
-			}
-		}
-		return Promise.resolve(true);
-	}
-}
-
 export class ReloadWebviewAction extends Action {
 	static readonly ID = 'workbench.action.webview.reloadWebviewAction';
 	static readonly LABEL = nls.localize('refreshWebviewLabel', "Reload Webviews");
@@ -148,8 +67,8 @@ export class ReloadWebviewAction extends Action {
 	}
 }
 
-function getActiveWebviewEditor(accessor: ServicesAccessor): WebviewEditor | null {
+export function getActiveWebviewEditor(accessor: ServicesAccessor): WebviewEditor | undefined {
 	const editorService = accessor.get(IEditorService);
-	const activeControl = editorService.activeControl as WebviewEditor;
-	return activeControl.isWebviewEditor ? activeControl : null;
+	const activeControl = editorService.activeControl as WebviewEditor | undefined;
+	return activeControl?.isWebviewEditor ? activeControl : undefined;
 }

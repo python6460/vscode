@@ -26,16 +26,16 @@ import { localizeManifest } from '../common/extensionNls';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { Limiter, createCancelablePromise, CancelablePromise, Queue } from 'vs/base/common/async';
 import { Event, Emitter } from 'vs/base/common/event';
-import * as semver from 'semver';
+import * as semver from 'semver-umd';
 import { URI } from 'vs/base/common/uri';
-import pkg from 'vs/platform/product/node/package';
+import product from 'vs/platform/product/common/product';
 import { isMacintosh, isWindows } from 'vs/base/common/platform';
 import { ILogService } from 'vs/platform/log/common/log';
 import { ExtensionsManifestCache } from 'vs/platform/extensionManagement/node/extensionsManifestCache';
 import { ExtensionsLifecycle } from 'vs/platform/extensionManagement/node/extensionLifecycle';
 import { toErrorMessage } from 'vs/base/common/errorMessage';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { isEngineValid } from 'vs/platform/extensions/node/extensionValidator';
+import { isEngineValid } from 'vs/platform/extensions/common/extensionValidator';
 import { tmpdir } from 'os';
 import { generateUuid } from 'vs/base/common/uuid';
 import { IDownloadService } from 'vs/platform/download/common/download';
@@ -101,7 +101,7 @@ interface InstallableExtension {
 
 export class ExtensionManagementService extends Disposable implements IExtensionManagementService {
 
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	private systemExtensionsPath: string;
 	private extensionsPath: string;
@@ -109,7 +109,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 	private uninstalledFileLimiter: Queue<any>;
 	private reportedExtensions: Promise<IReportedExtension[]> | undefined;
 	private lastReportTimestamp = 0;
-	private readonly installingExtensions: Map<string, CancelablePromise<void>> = new Map<string, CancelablePromise<void>>();
+	private readonly installingExtensions: Map<string, CancelablePromise<ILocalExtension>> = new Map<string, CancelablePromise<ILocalExtension>>();
 	private readonly uninstallingExtensions: Map<string, CancelablePromise<void>> = new Map<string, CancelablePromise<void>>();
 	private readonly manifestCache: ExtensionsManifestCache;
 	private readonly extensionLifecycle: ExtensionsLifecycle;
@@ -135,7 +135,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 	) {
 		super();
 		this.systemExtensionsPath = environmentService.builtinExtensionsPath;
-		this.extensionsPath = environmentService.extensionsPath;
+		this.extensionsPath = environmentService.extensionsPath!;
 		this.uninstalledPath = path.join(this.extensionsPath, '.obsolete');
 		this.uninstalledFileLimiter = new Queue();
 		this.manifestCache = this._register(new ExtensionsManifestCache(environmentService, this));
@@ -153,12 +153,18 @@ export class ExtensionManagementService extends Disposable implements IExtension
 		this.logService.trace('ExtensionManagementService#zip', extension.identifier.id);
 		return this.collectFiles(extension)
 			.then(files => zip(path.join(tmpdir(), generateUuid()), files))
-			.then(path => URI.file(path));
+			.then<URI>(path => URI.file(path));
 	}
 
 	unzip(zipLocation: URI, type: ExtensionType): Promise<IExtensionIdentifier> {
 		this.logService.trace('ExtensionManagementService#unzip', zipLocation.toString());
-		return this.install(zipLocation, type);
+		return this.install(zipLocation, type).then(local => local.identifier);
+	}
+
+	async getManifest(vsix: URI): Promise<IExtensionManifest> {
+		const downloadLocation = await this.downloadVsix(vsix);
+		const zipPath = path.resolve(downloadLocation.fsPath);
+		return getManifest(zipPath);
 	}
 
 	private collectFiles(extension: ILocalExtension): Promise<IFile[]> {
@@ -187,7 +193,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 
 	}
 
-	install(vsix: URI, type: ExtensionType = ExtensionType.User): Promise<IExtensionIdentifier> {
+	install(vsix: URI, type: ExtensionType = ExtensionType.User): Promise<ILocalExtension> {
 		this.logService.trace('ExtensionManagementService#install', vsix.toString());
 		return createCancelablePromise(token => {
 			return this.downloadVsix(vsix).then(downloadLocation => {
@@ -197,8 +203,8 @@ export class ExtensionManagementService extends Disposable implements IExtension
 					.then(manifest => {
 						const identifier = { id: getGalleryExtensionId(manifest.publisher, manifest.name) };
 						let operation: InstallOperation = InstallOperation.Install;
-						if (manifest.engines && manifest.engines.vscode && !isEngineValid(manifest.engines.vscode)) {
-							return Promise.reject(new Error(nls.localize('incompatible', "Unable to install extension '{0}' as it is not compatible with VS Code '{1}'.", identifier.id, pkg.version)));
+						if (manifest.engines && manifest.engines.vscode && !isEngineValid(manifest.engines.vscode, product.version)) {
+							return Promise.reject(new Error(nls.localize('incompatible', "Unable to install extension '{0}' as it is not compatible with VS Code '{1}'.", identifier.id, product.version)));
 						}
 						const identifierWithVersion = new ExtensionIdentifierWithVersion(identifier, manifest.version);
 						return this.getInstalled(ExtensionType.User)
@@ -211,6 +217,16 @@ export class ExtensionManagementService extends Disposable implements IExtension
 									} else if (semver.gt(existing.manifest.version, manifest.version)) {
 										return this.uninstall(existing, true);
 									}
+								} else {
+									// Remove the extension with same version if it is already uninstalled.
+									// Installing a VSIX extension shall replace the existing extension always.
+									return this.unsetUninstalledAndGetLocal(identifierWithVersion)
+										.then(existing => {
+											if (existing) {
+												return this.removeExtension(existing, 'existing').then(null, e => Promise.reject(new Error(nls.localize('restartCode', "Please restart VS Code before reinstalling {0}.", manifest.displayName || manifest.name))));
+											}
+											return undefined;
+										});
 								}
 								return undefined;
 							})
@@ -222,7 +238,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 										metadata => this.installFromZipPath(identifierWithVersion, zipPath, metadata, type, operation, token),
 										() => this.installFromZipPath(identifierWithVersion, zipPath, null, type, operation, token))
 									.then(
-										() => { this.logService.info('Successfully installed the extension:', identifier.id); return identifier; },
+										local => { this.logService.info('Successfully installed the extension:', identifier.id); return local; },
 										e => {
 											this.logService.error('Failed to install the extension:', identifier.id, e.message);
 											return Promise.reject(e);
@@ -241,7 +257,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 			throw new Error('Download service is not available');
 		}
 		const downloadedLocation = path.join(tmpdir(), generateUuid());
-		return this.downloadService.download(vsix, downloadedLocation).then(() => URI.file(downloadedLocation));
+		return this.downloadService.download(vsix, URI.file(downloadedLocation)).then(() => URI.file(downloadedLocation));
 	}
 
 	private installFromZipPath(identifierWithVersion: ExtensionIdentifierWithVersion, zipPath: string, metadata: IGalleryMetadata | null, type: ExtensionType, operation: InstallOperation, token: CancellationToken): Promise<ILocalExtension> {
@@ -264,7 +280,10 @@ export class ExtensionManagementService extends Disposable implements IExtension
 			));
 	}
 
-	async installFromGallery(extension: IGalleryExtension): Promise<void> {
+	async installFromGallery(extension: IGalleryExtension): Promise<ILocalExtension> {
+		if (!this.galleryService.isEnabled()) {
+			return Promise.reject(new Error(nls.localize('MarketPlaceDisabled', "Marketplace is not enabled")));
+		}
 		const startTime = new Date().getTime();
 
 		const onDidInstallExtensionSuccess = (extension: IGalleryExtension, operation: InstallOperation, local: ILocalExtension) => {
@@ -298,7 +317,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 			this._onInstallExtension.fire({ identifier: extension.identifier, gallery: extension });
 
 			let operation: InstallOperation = InstallOperation.Install;
-			let cancellationToken: CancellationToken, successCallback: (a?: any) => void, errorCallback: (e?: any) => any | null;
+			let cancellationToken: CancellationToken, successCallback: (local: ILocalExtension) => void, errorCallback: (e?: any) => any | null;
 			cancellablePromise = createCancelablePromise(token => { cancellationToken = token; return new Promise((c, e) => { successCallback = c; errorCallback = e; }); });
 			this.installingExtensions.set(key, cancellablePromise);
 			try {
@@ -320,7 +339,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 							}
 							this.installingExtensions.delete(key);
 							onDidInstallExtensionSuccess(extension, operation, local);
-							successCallback(null);
+							successCallback(local);
 						},
 						error => {
 							this.installingExtensions.delete(key);
@@ -347,7 +366,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 		const compatibleExtension = await this.galleryService.getCompatibleExtension(extension);
 
 		if (!compatibleExtension) {
-			return Promise.reject(new ExtensionManagementError(nls.localize('notFoundCompatibleDependency', "Unable to install '{0}' extension because it is not compatible with the current version of VS Code (version {1}).", extension.identifier.id, pkg.version), INSTALL_ERROR_INCOMPATIBLE));
+			return Promise.reject(new ExtensionManagementError(nls.localize('notFoundCompatibleDependency', "Unable to install '{0}' extension because it is not compatible with the current version of VS Code (version {1}).", extension.identifier.id, product.version), INSTALL_ERROR_INCOMPATIBLE));
 		}
 
 		return compatibleExtension;
@@ -364,7 +383,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 					return this.setUninstalled(extension)
 						.then(() => this.removeUninstalledExtension(extension)
 							.then(
-								() => this.installFromGallery(galleryExtension),
+								() => this.installFromGallery(galleryExtension).then(),
 								e => Promise.reject(new Error(nls.localize('removeError', "Error while removing the extension: {0}. Please Quit and Start VS Code before trying again.", toErrorMessage(e))))));
 				}
 				return Promise.reject(new Error(nls.localize('Not a Marketplace extension', "Only Marketplace Extensions can be reinstalled")));
@@ -388,9 +407,10 @@ export class ExtensionManagementService extends Disposable implements IExtension
 		};
 
 		this.logService.trace('Started downloading extension:', extension.identifier.id);
-		return this.galleryService.download(extension, operation)
+		return this.galleryService.download(extension, URI.file(tmpdir()), operation)
 			.then(
-				zipPath => {
+				zip => {
+					const zipPath = zip.fsPath;
 					this.logService.info('Downloaded extension:', extension.identifier.id, zipPath);
 					return getManifest(zipPath)
 						.then(
@@ -450,7 +470,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 				}
 				this.logService.info('Installation completed.', identifier.id);
 				if (metadata) {
-					local.metadata = metadata;
+					this.setMetadata(local, metadata);
 					return this.saveMetadataForLocalExtension(local);
 				}
 				return local;
@@ -514,10 +534,10 @@ export class ExtensionManagementService extends Disposable implements IExtension
 								.then(galleryResult => {
 									const extensionsToInstall = galleryResult.firstPage;
 									return Promise.all(extensionsToInstall.map(e => this.installFromGallery(e)))
-										.then(() => null, errors => this.rollback(extensionsToInstall).then(() => Promise.reject(errors), () => Promise.reject(errors)));
+										.then(undefined, errors => this.rollback(extensionsToInstall).then(() => Promise.reject(errors), () => Promise.reject(errors)));
 								});
 						}
-						return null;
+						return;
 					});
 			}
 		}
@@ -538,7 +558,7 @@ export class ExtensionManagementService extends Disposable implements IExtension
 			.then(installed => {
 				const extensionToUninstall = installed.filter(e => areSameExtensions(e.identifier, extension.identifier))[0];
 				if (extensionToUninstall) {
-					return this.checkForDependenciesAndUninstall(extensionToUninstall, installed).then(() => null, error => Promise.reject(this.joinErrors(error)));
+					return this.checkForDependenciesAndUninstall(extensionToUninstall, installed).then(undefined, error => Promise.reject(this.joinErrors(error)));
 				} else {
 					return Promise.reject(new Error(nls.localize('notInstalled', "Extension '{0}' is not installed.", extension.manifest.displayName || extension.manifest.name)));
 				}
@@ -780,10 +800,19 @@ export class ExtensionManagementService extends Disposable implements IExtension
 					const readmeUrl = readme ? URI.file(path.join(extensionPath, readme)) : null;
 					const changelog = children.filter(child => /^changelog(\.txt|\.md|)$/i.test(child))[0];
 					const changelogUrl = changelog ? URI.file(path.join(extensionPath, changelog)) : null;
-					const identifier = { id: getGalleryExtensionId(manifest.publisher, manifest.name), uuid: metadata ? metadata.id : null };
-					return <ILocalExtension>{ type, identifier, manifest, metadata, location: URI.file(extensionPath), readmeUrl, changelogUrl };
+					const identifier = { id: getGalleryExtensionId(manifest.publisher, manifest.name) };
+					const local = <ILocalExtension>{ type, identifier, manifest, metadata, location: URI.file(extensionPath), readmeUrl, changelogUrl };
+					if (metadata) {
+						this.setMetadata(local, metadata);
+					}
+					return local;
 				}))
 			.then(undefined, () => null);
+	}
+
+	private setMetadata(local: ILocalExtension, metadata: IGalleryMetadata): void {
+		local.metadata = metadata;
+		local.identifier.uuid = metadata.id;
 	}
 
 	async removeDeprecatedExtensions(): Promise<void> {

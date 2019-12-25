@@ -17,27 +17,32 @@ import { IAction, Action } from 'vs/base/common/actions';
 import { CopyValueAction } from 'vs/workbench/contrib/debug/browser/debugActions';
 import { Separator } from 'vs/base/browser/ui/actionbar/actionbar';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { IViewletPanelOptions, ViewletPanel } from 'vs/workbench/browser/parts/views/panelViewlet';
+import { IViewPaneOptions, ViewPane } from 'vs/workbench/browser/parts/views/viewPaneContainer';
 import { IAccessibilityProvider } from 'vs/base/browser/ui/list/listWidget';
 import { IListVirtualDelegate } from 'vs/base/browser/ui/list/list';
 import { ITreeRenderer, ITreeNode, ITreeMouseEvent, ITreeContextMenuEvent, IAsyncDataSource } from 'vs/base/browser/ui/tree/tree';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { Emitter } from 'vs/base/common/event';
 import { WorkbenchAsyncDataTree } from 'vs/platform/list/browser/listService';
-import { onUnexpectedError } from 'vs/base/common/errors';
+import { IAsyncDataTreeViewState } from 'vs/base/browser/ui/tree/asyncDataTree';
 import { FuzzyScore, createMatches } from 'vs/base/common/filters';
 import { HighlightedLabel, IHighlight } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
 import { IClipboardService } from 'vs/platform/clipboard/common/clipboardService';
+import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
+import { dispose } from 'vs/base/common/lifecycle';
+import { SIDE_BAR_BACKGROUND } from 'vs/workbench/common/theme';
 
 const $ = dom.$;
+let forgetScopes = true;
 
 export const variableSetEmitter = new Emitter<void>();
 
-export class VariablesView extends ViewletPanel {
+export class VariablesView extends ViewPane {
 
 	private onFocusStackFrameScheduler: RunOnceScheduler;
-	private needsRefresh: boolean;
-	private tree: WorkbenchAsyncDataTree<IViewModel | IExpression | IScope, IExpression | IScope, FuzzyScore>;
+	private needsRefresh = false;
+	private tree!: WorkbenchAsyncDataTree<IViewModel | IExpression | IScope, IExpression | IScope, FuzzyScore>;
+	private savedViewState: IAsyncDataTreeViewState | undefined;
 
 	constructor(
 		options: IViewletViewOptions,
@@ -46,24 +51,34 @@ export class VariablesView extends ViewletPanel {
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IClipboardService private readonly clipboardService: IClipboardService
+		@IClipboardService private readonly clipboardService: IClipboardService,
+		@IContextKeyService contextKeyService: IContextKeyService
 	) {
-		super({ ...(options as IViewletPanelOptions), ariaHeaderLabel: nls.localize('variablesSection', "Variables Section") }, keybindingService, contextMenuService, configurationService);
+		super({ ...(options as IViewPaneOptions), ariaHeaderLabel: nls.localize('variablesSection', "Variables Section") }, keybindingService, contextMenuService, configurationService, contextKeyService);
 
 		// Use scheduler to prevent unnecessary flashing
-		this.onFocusStackFrameScheduler = new RunOnceScheduler(() => {
+		this.onFocusStackFrameScheduler = new RunOnceScheduler(async () => {
+			const stackFrame = this.debugService.getViewModel().focusedStackFrame;
+
 			this.needsRefresh = false;
-			this.tree.updateChildren().then(() => {
-				const stackFrame = this.debugService.getViewModel().focusedStackFrame;
-				if (stackFrame) {
-					stackFrame.getScopes().then(scopes => {
-						// Expand the first scope if it is not expensive and if there is no expansion state (all are collapsed)
-						if (scopes.every(s => this.tree.getNode(s).collapsed) && scopes.length > 0 && !scopes[0].expensive) {
-							this.tree.expand(scopes[0]).then(undefined, onUnexpectedError);
-						}
-					});
+			if (stackFrame && this.savedViewState) {
+				await this.tree.setInput(this.debugService.getViewModel(), this.savedViewState);
+				this.savedViewState = undefined;
+			} else {
+				if (!stackFrame) {
+					// We have no stackFrame, save tree state before it is cleared
+					this.savedViewState = this.tree.getViewState();
 				}
-			}, onUnexpectedError);
+				await this.tree.updateChildren();
+				if (stackFrame) {
+					const scopes = await stackFrame.getScopes();
+					// Expand the first scope if it is not expensive and if there is no expansion state (all are collapsed)
+					if (scopes.every(s => this.tree.getNode(s).collapsed) && scopes.length > 0 && !scopes[0].expensive) {
+						this.tree.expand(scopes[0]);
+					}
+				}
+
+			}
 		}, 400);
 	}
 
@@ -71,21 +86,26 @@ export class VariablesView extends ViewletPanel {
 		dom.addClass(container, 'debug-variables');
 		const treeContainer = renderViewTree(container);
 
-		this.tree = this.instantiationService.createInstance(WorkbenchAsyncDataTree, treeContainer, new VariablesDelegate(),
+		this.tree = this.instantiationService.createInstance<typeof WorkbenchAsyncDataTree, WorkbenchAsyncDataTree<IViewModel | IExpression | IScope, IExpression | IScope, FuzzyScore>>(WorkbenchAsyncDataTree, 'VariablesView', treeContainer, new VariablesDelegate(),
 			[this.instantiationService.createInstance(VariablesRenderer), new ScopesRenderer()],
 			new VariablesDataSource(), {
-				ariaLabel: nls.localize('variablesAriaTreeLabel', "Debug Variables"),
-				accessibilityProvider: new VariablesAccessibilityProvider(),
-				identityProvider: { getId: (element: IExpression | IScope) => element.getId() },
-				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: (e: IExpression | IScope) => e }
-			}) as WorkbenchAsyncDataTree<IViewModel | IExpression | IScope, IExpression | IScope, FuzzyScore>;
+			ariaLabel: nls.localize('variablesAriaTreeLabel', "Debug Variables"),
+			accessibilityProvider: new VariablesAccessibilityProvider(),
+			identityProvider: { getId: (element: IExpression | IScope) => element.getId() },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: (e: IExpression | IScope) => e },
+			overrideStyles: {
+				listBackground: SIDE_BAR_BACKGROUND
+			}
+		});
 
-		this.tree.setInput(this.debugService.getViewModel()).then(null, onUnexpectedError);
+		this.tree.setInput(this.debugService.getViewModel());
 
 		CONTEXT_VARIABLES_FOCUSED.bindTo(this.tree.contextKeyService);
 
-		const collapseAction = new CollapseAction(this.tree, true, 'explorer-action collapse-explorer');
-		this.toolbar.setActions([collapseAction])();
+		if (this.toolbar) {
+			const collapseAction = new CollapseAction(this.tree, true, 'explorer-action codicon-collapse-all');
+			this.toolbar.setActions([collapseAction])();
+		}
 		this.tree.updateChildren();
 
 		this._register(this.debugService.getViewModel().onDidFocusStackFrame(sf => {
@@ -99,9 +119,16 @@ export class VariablesView extends ViewletPanel {
 			const timeout = sf.explicit ? 0 : undefined;
 			this.onFocusStackFrameScheduler.schedule(timeout);
 		}));
-		this._register(variableSetEmitter.event(() => this.tree.updateChildren()));
+		this._register(variableSetEmitter.event(() => {
+			const stackFrame = this.debugService.getViewModel().focusedStackFrame;
+			if (stackFrame && forgetScopes) {
+				stackFrame.forgetScopes();
+			}
+			forgetScopes = true;
+			this.tree.updateChildren();
+		}));
 		this._register(this.tree.onMouseDblClick(e => this.onMouseDblClick(e)));
-		this._register(this.tree.onContextMenu(e => this.onContextMenu(e)));
+		this._register(this.tree.onContextMenu(async e => await this.onContextMenu(e)));
 
 		this._register(this.onDidChangeBodyVisibility(visible => {
 			if (visible && this.needsRefresh) {
@@ -130,7 +157,7 @@ export class VariablesView extends ViewletPanel {
 		}
 	}
 
-	private onContextMenu(e: ITreeContextMenuEvent<IExpression | IScope>): void {
+	private async onContextMenu(e: ITreeContextMenuEvent<IExpression | IScope>): Promise<void> {
 		const variable = e.element;
 		if (variable instanceof Variable && !!variable.value) {
 			const actions: IAction[] = [];
@@ -144,8 +171,7 @@ export class VariablesView extends ViewletPanel {
 			actions.push(this.instantiationService.createInstance(CopyValueAction, CopyValueAction.ID, CopyValueAction.LABEL, variable, 'variables'));
 			if (variable.evaluateName) {
 				actions.push(new Action('debug.copyEvaluatePath', nls.localize('copyAsExpression', "Copy as Expression"), undefined, true, () => {
-					this.clipboardService.writeText(variable.evaluateName!);
-					return Promise.resolve();
+					return this.clipboardService.writeText(variable.evaluateName!);
 				}));
 				actions.push(new Separator());
 				actions.push(new Action('debug.addToWatchExpressions', nls.localize('addToWatchExpressions', "Add to Watch"), undefined, true, () => {
@@ -153,11 +179,22 @@ export class VariablesView extends ViewletPanel {
 					return Promise.resolve(undefined);
 				}));
 			}
+			if (session && session.capabilities.supportsDataBreakpoints) {
+				const response = await session.dataBreakpointInfo(variable.name, variable.parent.reference);
+				const dataid = response.dataId;
+				if (dataid) {
+					actions.push(new Separator());
+					actions.push(new Action('debug.breakWhenValueChanges', nls.localize('breakWhenValueChanges', "Break When Value Changes"), undefined, true, () => {
+						return this.debugService.addDataBreakpoint(response.description, dataid, !!response.canPersist, response.accessTypes);
+					}));
+				}
+			}
 
 			this.contextMenuService.showContextMenu({
 				getAnchor: () => e.anchor,
 				getActions: () => actions,
-				getActionsContext: () => variable
+				getActionsContext: () => variable,
+				onHide: () => dispose(actions)
 			});
 		}
 	}
@@ -256,7 +293,11 @@ export class VariablesRenderer extends AbstractExpressionsRenderer {
 				if (success && variable.value !== value) {
 					variable.setVariable(value)
 						// Need to force watch expressions and variables to update since a variable change can have an effect on both
-						.then(() => variableSetEmitter.fire());
+						.then(() => {
+							// Do not refresh scopes due to a node limitation #15520
+							forgetScopes = false;
+							variableSetEmitter.fire();
+						});
 				}
 			}
 		};

@@ -3,16 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IDisposable, dispose } from 'vs/base/common/lifecycle';
+import { IDisposable, dispose, DisposableStore } from 'vs/base/common/lifecycle';
+
+export enum WidgetVerticalAlignment {
+	Bottom,
+	Top
+}
 
 const WIDGET_HEIGHT = 29;
 
 export class TerminalWidgetManager implements IDisposable {
-	private _container: HTMLElement | null;
-	private _xtermViewport: HTMLElement | null;
+	private _container: HTMLElement | undefined;
+	private _xtermViewport: HTMLElement | undefined;
 
-	private _messageWidget: MessageWidget;
-	private _messageListeners: IDisposable[] = [];
+	private _messageWidget: MessageWidget | undefined;
+	private readonly _messageListeners = new DisposableStore();
 
 	constructor(
 		terminalWrapper: HTMLElement
@@ -27,9 +32,10 @@ export class TerminalWidgetManager implements IDisposable {
 	public dispose(): void {
 		if (this._container && this._container.parentElement) {
 			this._container.parentElement.removeChild(this._container);
-			this._container = null;
+			this._container = undefined;
 		}
-		this._xtermViewport = null;
+		this._xtermViewport = undefined;
+		this._messageListeners.dispose();
 	}
 
 	private _initTerminalHeightWatcher(terminalWrapper: HTMLElement) {
@@ -42,19 +48,19 @@ export class TerminalWidgetManager implements IDisposable {
 		mutationObserver.observe(this._xtermViewport, { attributes: true, attributeFilter: ['style'] });
 	}
 
-	public showMessage(left: number, top: number, text: string): void {
+	public showMessage(left: number, y: number, text: string, verticalAlignment: WidgetVerticalAlignment = WidgetVerticalAlignment.Bottom): void {
 		if (!this._container) {
 			return;
 		}
 		dispose(this._messageWidget);
-		this._messageListeners = dispose(this._messageListeners);
-		this._messageWidget = new MessageWidget(this._container, left, top, text);
+		this._messageListeners.clear();
+		this._messageWidget = new MessageWidget(this._container, left, y, text, verticalAlignment);
 	}
 
 	public closeMessage(): void {
-		this._messageListeners = dispose(this._messageListeners);
+		this._messageListeners.clear();
 		if (this._messageWidget) {
-			this._messageListeners.push(MessageWidget.fadeOut(this._messageWidget));
+			this._messageListeners.add(MessageWidget.fadeOut(this._messageWidget));
 		}
 	}
 
@@ -70,9 +76,10 @@ class MessageWidget {
 	private _domNode: HTMLDivElement;
 
 	public get left(): number { return this._left; }
-	public get top(): number { return this._top; }
+	public get y(): number { return this._y; }
 	public get text(): string { return this._text; }
 	public get domNode(): HTMLElement { return this._domNode; }
+	public get verticalAlignment(): WidgetVerticalAlignment { return this._verticalAlignment; }
 
 	public static fadeOut(messageWidget: MessageWidget): IDisposable {
 		let handle: any;
@@ -90,13 +97,22 @@ class MessageWidget {
 	constructor(
 		private _container: HTMLElement,
 		private _left: number,
-		private _top: number,
-		private _text: string
+		private _y: number,
+		private _text: string,
+		private _verticalAlignment: WidgetVerticalAlignment
 	) {
 		this._domNode = document.createElement('div');
 		this._domNode.style.position = 'absolute';
 		this._domNode.style.left = `${_left}px`;
-		this._domNode.style.bottom = `${_container.offsetHeight - Math.max(_top, WIDGET_HEIGHT)}px`;
+
+		if (this.verticalAlignment === WidgetVerticalAlignment.Top) {
+			// Y position is to the top of the widget
+			this._domNode.style.bottom = `${Math.max(_y, WIDGET_HEIGHT) - WIDGET_HEIGHT}px`;
+		} else {
+			// Y position is to the bottom of the widget
+			this._domNode.style.bottom = `${Math.min(_y, _container.offsetHeight - WIDGET_HEIGHT)}px`;
+		}
+
 		this._domNode.classList.add('terminal-message-widget', 'fadeIn');
 		this._domNode.textContent = _text;
 		this._container.appendChild(this._domNode);

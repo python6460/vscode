@@ -9,14 +9,15 @@ import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 import { CodeLensModel } from 'vs/editor/contrib/codelens/codelens';
 import { LRUCache, values } from 'vs/base/common/map';
 import { CodeLensProvider, CodeLensList, CodeLens } from 'vs/editor/common/modes';
-import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
+import { IStorageService, StorageScope, WillSaveStateReason } from 'vs/platform/storage/common/storage';
 import { Range } from 'vs/editor/common/core/range';
 import { runWhenIdle } from 'vs/base/common/async';
+import { once } from 'vs/base/common/functional';
 
 export const ICodeLensCache = createDecorator<ICodeLensCache>('ICodeLensCache');
 
 export interface ICodeLensCache {
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 	put(model: ITextModel, data: CodeLensModel): void;
 	get(model: ITextModel): CodeLensModel | undefined;
 	delete(model: ITextModel): void;
@@ -37,7 +38,7 @@ class CacheItem {
 
 export class CodeLensCache implements ICodeLensCache {
 
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	private readonly _fakeProvider = new class implements CodeLensProvider {
 		provideCodeLenses(): CodeLensList {
@@ -59,18 +60,26 @@ export class CodeLensCache implements ICodeLensCache {
 		this._deserialize(raw);
 
 		// store lens data on shutdown
-		const listener = storageService.onWillSaveState(() => {
-			storageService.store(key, this._serialize(), StorageScope.WORKSPACE);
-			listener.dispose();
+		once(storageService.onWillSaveState)(e => {
+			if (e.reason === WillSaveStateReason.SHUTDOWN) {
+				storageService.store(key, this._serialize(), StorageScope.WORKSPACE);
+			}
 		});
 	}
 
 	put(model: ITextModel, data: CodeLensModel): void {
+		// create a copy of the model that is without command-ids
+		// but with comand-labels
+		const copyItems = data.lenses.map(item => {
+			return <CodeLens>{
+				range: item.symbol.range,
+				command: item.symbol.command && { id: '', title: item.symbol.command?.title },
+			};
+		});
+		const copyModel = new CodeLensModel();
+		copyModel.add({ lenses: copyItems, dispose: () => { } }, this._fakeProvider);
 
-		const lensModel = new CodeLensModel();
-		lensModel.add({ lenses: data.lenses.map(v => v.symbol), dispose() { } }, this._fakeProvider);
-
-		const item = new CacheItem(model.getLineCount(), lensModel);
+		const item = new CacheItem(model.getLineCount(), copyModel);
 		this._cache.set(model.uri.toString(), item);
 	}
 

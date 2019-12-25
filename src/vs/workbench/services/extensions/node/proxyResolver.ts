@@ -17,11 +17,11 @@ import { IExtHostWorkspaceProvider } from 'vs/workbench/api/common/extHostWorksp
 import { ExtHostConfigProvider } from 'vs/workbench/api/common/extHostConfiguration';
 import { ProxyAgent } from 'vscode-proxy-agent';
 import { MainThreadTelemetryShape } from 'vs/workbench/api/common/extHost.protocol';
-import { ExtHostLogService } from 'vs/workbench/api/common/extHostLogService';
 import { toErrorMessage } from 'vs/base/common/errorMessage';
 import { ExtHostExtensionService } from 'vs/workbench/api/node/extHostExtensionService';
 import { URI } from 'vs/base/common/uri';
 import { promisify } from 'util';
+import { ILogService } from 'vs/platform/log/common/log';
 
 interface ConnectionResult {
 	proxy: string;
@@ -34,7 +34,7 @@ export function connectProxyResolver(
 	extHostWorkspace: IExtHostWorkspaceProvider,
 	configProvider: ExtHostConfigProvider,
 	extensionService: ExtHostExtensionService,
-	extHostLogService: ExtHostLogService,
+	extHostLogService: ILogService,
 	mainThreadTelemetry: MainThreadTelemetryShape
 ) {
 	const resolveProxy = setupProxyResolution(extHostWorkspace, configProvider, extHostLogService, mainThreadTelemetry);
@@ -47,7 +47,7 @@ const maxCacheEntries = 5000; // Cache can grow twice that much due to 'oldCache
 function setupProxyResolution(
 	extHostWorkspace: IExtHostWorkspaceProvider,
 	configProvider: ExtHostConfigProvider,
-	extHostLogService: ExtHostLogService,
+	extHostLogService: ILogService,
 	mainThreadTelemetry: MainThreadTelemetryShape
 ) {
 	const env = process.env;
@@ -103,22 +103,33 @@ function setupProxyResolution(
 	let results: ConnectionResult[] = [];
 	function logEvent() {
 		timeout = undefined;
-		/* __GDPR__
-			"resolveProxy" : {
-				"count": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"duration": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"errorCount": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"cacheCount": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"cacheSize": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"cacheRolls": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"envCount": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"settingsCount": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"localhostCount": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"envNoProxyCount": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true },
-				"results": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" }
-			}
-		*/
-		mainThreadTelemetry.$publicLog('resolveProxy', { count, duration, errorCount, cacheCount, cacheSize: cache.size, cacheRolls, envCount, settingsCount, localhostCount, envNoProxyCount, results });
+		type ResolveProxyClassification = {
+			count: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			duration: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			errorCount: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			cacheCount: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			cacheSize: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			cacheRolls: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			envCount: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			settingsCount: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			localhostCount: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			envNoProxyCount: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth', isMeasurement: true };
+			results: { classification: 'SystemMetaData', purpose: 'PerformanceAndHealth' };
+		};
+		type ResolveProxyEvent = {
+			count: number;
+			duration: number;
+			errorCount: number;
+			cacheCount: number;
+			cacheSize: number;
+			cacheRolls: number;
+			envCount: number;
+			settingsCount: number;
+			localhostCount: number;
+			envNoProxyCount: number;
+			results: ConnectionResult[];
+		};
+		mainThreadTelemetry.$publicLog2<ResolveProxyEvent, ResolveProxyClassification>('resolveProxy', { count, duration, errorCount, cacheCount, cacheSize: cache.size, cacheRolls, envCount, settingsCount, localhostCount, envNoProxyCount, results });
 		count = duration = errorCount = cacheCount = envCount = settingsCount = localhostCount = envNoProxyCount = 0;
 		results = [];
 	}
@@ -332,9 +343,13 @@ function patches(originals: typeof http | typeof https, resolveProxy: ReturnType
 				return original.apply(null, arguments as unknown as any[]);
 			}
 
-			const optionsPatched = options.agent instanceof ProxyAgent;
+			const originalAgent = options.agent;
+			if (originalAgent === true) {
+				throw new Error('Unexpected agent option: true');
+			}
+			const optionsPatched = originalAgent instanceof ProxyAgent;
 			const config = onRequest && ((<any>options)._vscodeProxySupport || /* LS */ (<any>options)._vscodeSystemProxy) || proxySetting.config;
-			const useProxySettings = !optionsPatched && (config === 'override' || config === 'on' && !options.agent);
+			const useProxySettings = !optionsPatched && (config === 'override' || config === 'on' && originalAgent === undefined);
 			const useSystemCertificates = !optionsPatched && certSetting.config && originals === https && !(options as https.RequestOptions).ca;
 
 			if (useProxySettings || useSystemCertificates) {
@@ -356,7 +371,7 @@ function patches(originals: typeof http | typeof https, resolveProxy: ReturnType
 				options.agent = new ProxyAgent({
 					resolveProxy: resolveProxy.bind(undefined, { useProxySettings, useSystemCertificates }),
 					defaultPort: originals === https ? 443 : 80,
-					originalAgent: options.agent
+					originalAgent
 				});
 				return original(options, callback);
 			}
@@ -403,14 +418,14 @@ function configureModuleLoading(extensionService: ExtHostExtensionService, looku
 				const modules = lookup[request];
 				const ext = extensionPaths.findSubstr(URI.file(parent.filename).fsPath);
 				if (ext && ext.enableProposedApi) {
-					return modules[(<any>ext).proxySupport] || modules.onRequest;
+					return (modules as any)[(<any>ext).proxySupport] || modules.onRequest;
 				}
 				return modules.default;
 			};
 		});
 }
 
-function useSystemCertificates(extHostLogService: ExtHostLogService, useSystemCertificates: boolean, opts: http.RequestOptions, callback: () => void) {
+function useSystemCertificates(extHostLogService: ILogService, useSystemCertificates: boolean, opts: http.RequestOptions, callback: () => void) {
 	if (useSystemCertificates) {
 		getCaCertificates(extHostLogService)
 			.then(caCertificates => {
@@ -432,7 +447,7 @@ function useSystemCertificates(extHostLogService: ExtHostLogService, useSystemCe
 }
 
 let _caCertificates: ReturnType<typeof readCaCertificates> | Promise<undefined>;
-async function getCaCertificates(extHostLogService: ExtHostLogService) {
+async function getCaCertificates(extHostLogService: ILogService) {
 	if (!_caCertificates) {
 		_caCertificates = readCaCertificates()
 			.then(res => res && res.certs.length ? res : undefined)
@@ -458,7 +473,9 @@ async function readCaCertificates() {
 }
 
 async function readWindowsCaCertificates() {
-	const winCA = await import('vscode-windows-ca-certs');
+	const winCA = await new Promise<any>((resolve, reject) => {
+		require(['vscode-windows-ca-certs'], resolve, reject);
+	});
 
 	let ders: any[] = [];
 	const store = winCA();
@@ -471,11 +488,9 @@ async function readWindowsCaCertificates() {
 		store.done();
 	}
 
-	const seen = {};
-	const certs = ders.map(derToPem)
-		.filter(pem => !seen[pem] && (seen[pem] = true));
+	const certs = new Set(ders.map(derToPem));
 	return {
-		certs,
+		certs: Array.from(certs),
 		append: true
 	};
 }
@@ -489,11 +504,10 @@ async function readMacCaCertificates() {
 		child.on('error', reject);
 		child.on('exit', code => code ? reject(code) : resolve(stdout.join('')));
 	});
-	const seen = {};
-	const certs = stdout.split(/(?=-----BEGIN CERTIFICATE-----)/g)
-		.filter(pem => !!pem.length && !seen[pem] && (seen[pem] = true));
+	const certs = new Set(stdout.split(/(?=-----BEGIN CERTIFICATE-----)/g)
+		.filter(pem => !!pem.length));
 	return {
-		certs,
+		certs: Array.from(certs),
 		append: true
 	};
 }
@@ -507,11 +521,10 @@ async function readLinuxCaCertificates() {
 	for (const certPath of linuxCaCertificatePaths) {
 		try {
 			const content = await promisify(fs.readFile)(certPath, { encoding: 'utf8' });
-			const seen = {};
-			const certs = content.split(/(?=-----BEGIN CERTIFICATE-----)/g)
-				.filter(pem => !!pem.length && !seen[pem] && (seen[pem] = true));
+			const certs = new Set(content.split(/(?=-----BEGIN CERTIFICATE-----)/g)
+				.filter(pem => !!pem.length));
 			return {
-				certs,
+				certs: Array.from(certs),
 				append: false
 			};
 		} catch (err) {

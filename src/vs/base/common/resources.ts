@@ -221,7 +221,7 @@ export function addTrailingPathSeparator(resource: URI, sep: string = paths.sep)
  * Returns a relative path between two URIs. If the URIs don't have the same schema or authority, `undefined` is returned.
  * The returned relative path always uses forward slashes.
  */
-export function relativePath(from: URI, to: URI): string | undefined {
+export function relativePath(from: URI, to: URI, ignoreCase = hasToIgnoreCase(from)): string | undefined {
 	if (from.scheme !== to.scheme || !isEqualAuthority(from.authority, to.authority)) {
 		return undefined;
 	}
@@ -229,11 +229,25 @@ export function relativePath(from: URI, to: URI): string | undefined {
 		const relativePath = paths.relative(from.path, to.path);
 		return isWindows ? extpath.toSlashes(relativePath) : relativePath;
 	}
-	return paths.posix.relative(from.path || '/', to.path || '/');
+	let fromPath = from.path || '/', toPath = to.path || '/';
+	if (ignoreCase) {
+		// make casing of fromPath match toPath
+		let i = 0;
+		for (const len = Math.min(fromPath.length, toPath.length); i < len; i++) {
+			if (fromPath.charCodeAt(i) !== toPath.charCodeAt(i)) {
+				if (fromPath.charAt(i).toLowerCase() !== toPath.charAt(i).toLowerCase()) {
+					break;
+				}
+			}
+		}
+		fromPath = toPath.substr(0, i) + fromPath.substr(i);
+	}
+	return paths.posix.relative(fromPath, toPath);
 }
 
 /**
- * Resolves a absolute or relative path against a base URI.
+ * Resolves an absolute or relative path against a base URI.
+ * The path can be relative or absolute posix or a Windows path
  */
 export function resolvePath(base: URI, path: string): URI {
 	if (base.scheme === Schemas.file) {
@@ -242,6 +256,12 @@ export function resolvePath(base: URI, path: string): URI {
 			authority: newURI.authority,
 			path: newURI.path
 		});
+	}
+	if (path.indexOf('/') === -1) { // no slashes? it's likely a Windows path
+		path = extpath.toSlashes(path);
+		if (/^[a-zA-Z]:(\/|$)/.test(path)) { // starts with a drive letter
+			path = '/' + path;
+		}
 	}
 	return base.with({
 		path: paths.posix.resolve(base.path, path)

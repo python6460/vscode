@@ -6,16 +6,18 @@
 import { Registry } from 'vs/platform/registry/common/platform';
 import { IConfigurationRegistry, Extensions } from 'vs/platform/configuration/common/configurationRegistry';
 import { IDisposable, Disposable } from 'vs/base/common/lifecycle';
-import { IConfigurationService, IConfigurationChangeEvent, IConfigurationOverrides, ConfigurationTarget, compare, isConfigurationOverrides, IConfigurationData } from 'vs/platform/configuration/common/configuration';
-import { DefaultConfigurationModel, Configuration, ConfigurationChangeEvent, ConfigurationModel, ConfigurationModelParser } from 'vs/platform/configuration/common/configurationModels';
+import { IConfigurationService, IConfigurationChangeEvent, IConfigurationOverrides, ConfigurationTarget, isConfigurationOverrides, IConfigurationData, IConfigurationValue, IConfigurationChange } from 'vs/platform/configuration/common/configuration';
+import { DefaultConfigurationModel, Configuration, ConfigurationModel, ConfigurationModelParser, ConfigurationChangeEvent } from 'vs/platform/configuration/common/configurationModels';
 import { Event, Emitter } from 'vs/base/common/event';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 import { ConfigWatcher } from 'vs/base/node/config';
 import { onUnexpectedError } from 'vs/base/common/errors';
+import { URI } from 'vs/base/common/uri';
+import { Schemas } from 'vs/base/common/network';
 
 export class ConfigurationService extends Disposable implements IConfigurationService, IDisposable {
 
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	private configuration: Configuration;
 	private userConfigModelWatcher: ConfigWatcher<ConfigurationModelParser> | undefined;
@@ -24,7 +26,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 	readonly onDidChangeConfiguration: Event<IConfigurationChangeEvent> = this._onDidChangeConfiguration.event;
 
 	constructor(
-		private readonly configurationPath: string
+		private readonly settingsResource: URI
 	) {
 		super();
 		this.configuration = new Configuration(new DefaultConfigurationModel(), new ConfigurationModel());
@@ -36,10 +38,13 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 			this.userConfigModelWatcher.dispose();
 		}
 
+		if (this.settingsResource.scheme !== Schemas.file) {
+			return Promise.resolve();
+		}
 		return new Promise<void>((c, e) => {
-			this.userConfigModelWatcher = this._register(new ConfigWatcher(this.configurationPath, {
-				changeBufferDelay: 300, onError: error => onUnexpectedError(error), defaultConfig: new ConfigurationModelParser(this.configurationPath), parse: (content: string, parseErrors: any[]) => {
-					const userConfigModelParser = new ConfigurationModelParser(this.configurationPath);
+			this.userConfigModelWatcher = this._register(new ConfigWatcher(this.settingsResource.fsPath, {
+				changeBufferDelay: 300, onError: error => onUnexpectedError(error), defaultConfig: new ConfigurationModelParser(this.settingsResource.fsPath), parse: (content: string, parseErrors: any[]) => {
+					const userConfigModelParser = new ConfigurationModelParser(this.settingsResource.fsPath);
 					userConfigModelParser.parseContent(content);
 					parseErrors = [...userConfigModelParser.errors];
 					return userConfigModelParser;
@@ -74,13 +79,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		return Promise.reject(new Error('not supported'));
 	}
 
-	inspect<T>(key: string): {
-		default: T,
-		user: T,
-		workspace?: T,
-		workspaceFolder?: T
-		value: T
-	} {
+	inspect<T>(key: string): IConfigurationValue<T> {
 		return this.configuration.inspect<T>(key, {}, undefined);
 	}
 
@@ -104,21 +103,22 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 	}
 
 	private onDidChangeUserConfiguration(userConfigurationModel: ConfigurationModel): void {
-		const { added, updated, removed } = compare(this.configuration.localUserConfiguration, userConfigurationModel);
-		const changedKeys = [...added, ...updated, ...removed];
-		if (changedKeys.length) {
-			this.configuration.updateLocalUserConfiguration(userConfigurationModel);
-			this.trigger(changedKeys, ConfigurationTarget.USER);
-		}
+		const previous = this.configuration.toData();
+		const change = this.configuration.compareAndUpdateLocalUserConfiguration(userConfigurationModel);
+		this.trigger(change, previous, ConfigurationTarget.USER);
 	}
 
 	private onDidDefaultConfigurationChange(keys: string[]): void {
-		this.configuration.updateDefaultConfiguration(new DefaultConfigurationModel());
-		this.trigger(keys, ConfigurationTarget.DEFAULT);
+		const previous = this.configuration.toData();
+		const change = this.configuration.compareAndUpdateDefaultConfiguration(new DefaultConfigurationModel(), keys);
+		this.trigger(change, previous, ConfigurationTarget.DEFAULT);
 	}
 
-	private trigger(keys: string[], source: ConfigurationTarget): void {
-		this._onDidChangeConfiguration.fire(new ConfigurationChangeEvent().change(keys).telemetryData(source, this.getTargetConfiguration(source)));
+	private trigger(configurationChange: IConfigurationChange, previous: IConfigurationData, source: ConfigurationTarget): void {
+		const event = new ConfigurationChangeEvent(configurationChange, { data: previous }, this.configuration);
+		event.source = source;
+		event.sourceConfig = this.getTargetConfiguration(source);
+		this._onDidChangeConfiguration.fire(event);
 	}
 
 	private getTargetConfiguration(target: ConfigurationTarget): any {

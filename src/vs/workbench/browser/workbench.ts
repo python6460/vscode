@@ -6,27 +6,26 @@
 import 'vs/workbench/browser/style';
 
 import { localize } from 'vs/nls';
-import { setFileNameComparer } from 'vs/base/common/comparers';
 import { Event, Emitter, setGlobalLeakWarningThreshold } from 'vs/base/common/event';
 import { addClasses, addClass, removeClasses } from 'vs/base/browser/dom';
-import { runWhenIdle, IdleValue } from 'vs/base/common/async';
-import { getZoomLevel } from 'vs/base/browser/browser';
+import { runWhenIdle } from 'vs/base/common/async';
+import { getZoomLevel, isFirefox, isSafari, isChrome } from 'vs/base/browser/browser';
 import { mark } from 'vs/base/common/performance';
 import { onUnexpectedError, setUnexpectedErrorHandler } from 'vs/base/common/errors';
 import { Registry } from 'vs/platform/registry/common/platform';
-import { isWindows, isLinux, isWeb } from 'vs/base/common/platform';
+import { isWindows, isLinux, isWeb, isNative, isMacintosh } from 'vs/base/common/platform';
 import { IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions } from 'vs/workbench/common/contributions';
 import { IEditorInputFactoryRegistry, Extensions as EditorExtensions } from 'vs/workbench/common/editor';
 import { IActionBarRegistry, Extensions as ActionBarExtensions } from 'vs/workbench/browser/actions';
-import { getServices } from 'vs/platform/instantiation/common/extensions';
-import { Position, Parts, IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
-import { IStorageService } from 'vs/platform/storage/common/storage';
+import { getSingletonServiceDescriptors } from 'vs/platform/instantiation/common/extensions';
+import { Position, Parts, IWorkbenchLayoutService, positionToString } from 'vs/workbench/services/layout/browser/layoutService';
+import { IStorageService, WillSaveStateReason, StorageScope } from 'vs/platform/storage/common/storage';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
 import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
-import { LifecyclePhase, ILifecycleService, WillShutdownEvent } from 'vs/platform/lifecycle/common/lifecycle';
+import { LifecyclePhase, ILifecycleService, WillShutdownEvent, BeforeShutdownEvent } from 'vs/platform/lifecycle/common/lifecycle';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { NotificationService } from 'vs/workbench/services/notification/common/notificationService';
 import { NotificationsCenter } from 'vs/workbench/browser/parts/notifications/notificationsCenter';
@@ -37,7 +36,7 @@ import { NotificationsToasts } from 'vs/workbench/browser/parts/notifications/no
 import { IEditorService, IResourceEditor } from 'vs/workbench/services/editor/common/editorService';
 import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { setARIAContainer } from 'vs/base/browser/ui/aria/aria';
-import { restoreFontInfo, readFontInfo, saveFontInfo } from 'vs/editor/browser/config/configuration';
+import { readFontInfo, restoreFontInfo, serializeFontInfo } from 'vs/editor/browser/config/configuration';
 import { BareFontInfo } from 'vs/editor/common/config/fontInfo';
 import { ILogService } from 'vs/platform/log/common/log';
 import { toErrorMessage } from 'vs/base/common/errorMessage';
@@ -45,14 +44,18 @@ import { WorkbenchContextKeysHandler } from 'vs/workbench/browser/contextkeys';
 import { coalesce } from 'vs/base/common/arrays';
 import { InstantiationService } from 'vs/platform/instantiation/common/instantiationService';
 import { Layout } from 'vs/workbench/browser/layout';
+import { IHostService } from 'vs/workbench/services/host/browser/host';
 
 export class Workbench extends Layout {
 
-	private readonly _onShutdown = this._register(new Emitter<void>());
-	get onShutdown(): Event<void> { return this._onShutdown.event; }
+	private readonly _onBeforeShutdown = this._register(new Emitter<BeforeShutdownEvent>());
+	readonly onBeforeShutdown: Event<BeforeShutdownEvent> = this._onBeforeShutdown.event;
 
 	private readonly _onWillShutdown = this._register(new Emitter<WillShutdownEvent>());
-	get onWillShutdown(): Event<WillShutdownEvent> { return this._onWillShutdown.event; }
+	readonly onWillShutdown: Event<WillShutdownEvent> = this._onWillShutdown.event;
+
+	private readonly _onShutdown = this._register(new Emitter<void>());
+	readonly onShutdown: Event<void> = this._onShutdown.event;
 
 	constructor(
 		parent: HTMLElement,
@@ -80,11 +83,25 @@ export class Workbench extends Layout {
 		setUnexpectedErrorHandler(error => this.handleUnexpectedError(error, logService));
 
 		// Inform user about loading issues from the loader
+		interface AnnotatedLoadingError extends Error {
+			phase: 'loading';
+			moduleId: string;
+			neededBy: string[];
+		}
+		interface AnnotatedFactoryError extends Error {
+			phase: 'factory';
+			moduleId: string;
+		}
+		interface AnnotatedValidationError extends Error {
+			phase: 'configuration';
+		}
+		type AnnotatedError = AnnotatedLoadingError | AnnotatedFactoryError | AnnotatedValidationError;
 		(<any>window).require.config({
-			onError: (err: { errorCode: string; }) => {
-				if (err.errorCode === 'load') {
+			onError: (err: AnnotatedError) => {
+				if (err.phase === 'loading') {
 					onUnexpectedError(new Error(localize('loaderErrorNative', "Failed to load a required file. Please restart the application to try again. Details: {0}", JSON.stringify(err))));
 				}
+				console.error(err);
 			}
 		});
 	}
@@ -114,15 +131,6 @@ export class Workbench extends Layout {
 			// Configure emitter leak warning threshold
 			setGlobalLeakWarningThreshold(175);
 
-			// Setup Intl for comparers
-			setFileNameComparer(new IdleValue(() => {
-				const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-				return {
-					collator: collator,
-					collatorIsNumeric: collator.resolvedOptions().numeric
-				};
-			}));
-
 			// ARIA
 			setARIAContainer(document.body);
 
@@ -133,6 +141,7 @@ export class Workbench extends Layout {
 				const lifecycleService = accessor.get(ILifecycleService);
 				const storageService = accessor.get(IStorageService);
 				const configurationService = accessor.get(IConfigurationService);
+				const hostService = accessor.get(IHostService);
 
 				// Layout
 				this.initLayout(accessor);
@@ -144,13 +153,13 @@ export class Workbench extends Layout {
 				this._register(instantiationService.createInstance(WorkbenchContextKeysHandler));
 
 				// Register Listeners
-				this.registerListeners(lifecycleService, storageService, configurationService);
+				this.registerListeners(lifecycleService, storageService, configurationService, hostService);
 
 				// Render Workbench
 				this.renderWorkbench(instantiationService, accessor.get(INotificationService) as NotificationService, storageService, configurationService);
 
 				// Workbench Layout
-				this.createWorkbenchLayout(instantiationService);
+				this.createWorkbenchLayout();
 
 				// Layout
 				this.layout();
@@ -178,13 +187,13 @@ export class Workbench extends Layout {
 
 		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		// NOTE: DO NOT ADD ANY OTHER SERVICE INTO THE COLLECTION HERE.
-		// CONTRIBUTE IT VIA WORKBENCH.MAIN.TS AND registerSingleton().
+		// CONTRIBUTE IT VIA WORKBENCH.DESKTOP.MAIN.TS AND registerSingleton().
 		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 		// All Contributed Services
-		const contributedServices = getServices();
-		for (let contributedService of contributedServices) {
-			serviceCollection.set(contributedService.id, contributedService.descriptor);
+		const contributedServices = getSingletonServiceDescriptors();
+		for (let [id, descriptor] of contributedServices) {
+			serviceCollection.set(id, descriptor);
 		}
 
 		const instantiationService = new InstantiationService(serviceCollection, true);
@@ -217,25 +226,46 @@ export class Workbench extends Layout {
 	private registerListeners(
 		lifecycleService: ILifecycleService,
 		storageService: IStorageService,
-		configurationService: IConfigurationService
+		configurationService: IConfigurationService,
+		hostService: IHostService
 	): void {
 
+		// Configuration changes
+		this._register(configurationService.onDidChangeConfiguration(() => this.setFontAliasing(configurationService)));
+
+		// Font Info
+		if (isNative) {
+			this._register(storageService.onWillSaveState(e => {
+				if (e.reason === WillSaveStateReason.SHUTDOWN) {
+					this.storeFontInfo(storageService);
+				}
+			}));
+		} else {
+			this._register(lifecycleService.onWillShutdown(() => this.storeFontInfo(storageService)));
+		}
+
 		// Lifecycle
+		this._register(lifecycleService.onBeforeShutdown(event => this._onBeforeShutdown.fire(event)));
 		this._register(lifecycleService.onWillShutdown(event => this._onWillShutdown.fire(event)));
 		this._register(lifecycleService.onShutdown(() => {
 			this._onShutdown.fire();
 			this.dispose();
 		}));
 
-		// Storage
-		this._register(storageService.onWillSaveState(() => saveFontInfo(storageService)));
-
-		// Configuration changes
-		this._register(configurationService.onDidChangeConfiguration(() => this.setFontAliasing(configurationService)));
+		// In some environments we do not get enough time to persist state on shutdown.
+		// In other cases, VSCode might crash, so we periodically save state to reduce
+		// the chance of loosing any state.
+		// The window loosing focus is a good indication that the user has stopped working
+		// in that window so we pick that at a time to collect state.
+		this._register(hostService.onDidChangeFocus(focus => { if (!focus) { storageService.flush(); } }));
 	}
 
-	private fontAliasing: 'default' | 'antialiased' | 'none' | 'auto';
+	private fontAliasing: 'default' | 'antialiased' | 'none' | 'auto' | undefined;
 	private setFontAliasing(configurationService: IConfigurationService) {
+		if (!isMacintosh) {
+			return; // macOS only
+		}
+
 		const aliasing = configurationService.getValue<'default' | 'antialiased' | 'none' | 'auto'>('workbench.fontAliasing');
 		if (this.fontAliasing === aliasing) {
 			return;
@@ -253,6 +283,41 @@ export class Workbench extends Layout {
 		}
 	}
 
+	private restoreFontInfo(storageService: IStorageService, configurationService: IConfigurationService): void {
+
+		// Restore (native: use storage service, web: use browser specific local storage)
+		const storedFontInfoRaw = isNative ? storageService.get('editorFontInfo', StorageScope.GLOBAL) : window.localStorage.getItem('vscode.editorFontInfo');
+		if (storedFontInfoRaw) {
+			try {
+				const storedFontInfo = JSON.parse(storedFontInfoRaw);
+				if (Array.isArray(storedFontInfo)) {
+					restoreFontInfo(storedFontInfo);
+				}
+			} catch (err) {
+				/* ignore */
+			}
+		}
+
+		readFontInfo(BareFontInfo.createFromRawSettings(configurationService.getValue('editor'), getZoomLevel()));
+	}
+
+	private storeFontInfo(storageService: IStorageService): void {
+		const serializedFontInfo = serializeFontInfo();
+		if (serializedFontInfo) {
+			const serializedFontInfoRaw = JSON.stringify(serializedFontInfo);
+
+			// Font info is very specific to the machine the workbench runs
+			// on. As such, in the web, we prefer to store this info in
+			// local storage and not global storage because it would not make
+			// much sense to synchronize to other machines.
+			if (isNative) {
+				storageService.store('editorFontInfo', serializedFontInfoRaw, StorageScope.GLOBAL);
+			} else {
+				window.localStorage.setItem('vscode.editorFontInfo', serializedFontInfoRaw);
+			}
+		}
+	}
+
 	private renderWorkbench(instantiationService: IInstantiationService, notificationService: NotificationService, storageService: IStorageService, configurationService: IConfigurationService): void {
 
 		// State specific classes
@@ -261,10 +326,8 @@ export class Workbench extends Layout {
 			'monaco-workbench',
 			platformClass,
 			isWeb ? 'web' : undefined,
-			this.state.sideBar.hidden ? 'nosidebar' : undefined,
-			this.state.panel.hidden ? 'nopanel' : undefined,
-			this.state.statusBar.hidden ? 'nostatusbar' : undefined,
-			this.state.fullscreen ? 'fullscreen' : undefined
+			isChrome ? 'chromium' : isFirefox ? 'firefox' : isSafari ? 'safari' : undefined,
+			...this.getLayoutClasses()
 		]);
 
 		addClasses(this.container, ...workbenchClasses);
@@ -278,8 +341,7 @@ export class Workbench extends Layout {
 		this.setFontAliasing(configurationService);
 
 		// Warm up font cache information before building up too many dom elements
-		restoreFontInfo(storageService);
-		readFontInfo(BareFontInfo.createFromRawSettings(configurationService.getValue('editor'), getZoomLevel()));
+		this.restoreFontInfo(storageService, configurationService);
 
 		// Create Parts
 		[
@@ -287,17 +349,10 @@ export class Workbench extends Layout {
 			{ id: Parts.ACTIVITYBAR_PART, role: 'navigation', classes: ['activitybar', this.state.sideBar.position === Position.LEFT ? 'left' : 'right'] },
 			{ id: Parts.SIDEBAR_PART, role: 'complementary', classes: ['sidebar', this.state.sideBar.position === Position.LEFT ? 'left' : 'right'] },
 			{ id: Parts.EDITOR_PART, role: 'main', classes: ['editor'], options: { restorePreviousState: this.state.editor.restoreEditors } },
-			{ id: Parts.PANEL_PART, role: 'complementary', classes: ['panel', this.state.panel.position === Position.BOTTOM ? 'bottom' : 'right'] },
+			{ id: Parts.PANEL_PART, role: 'complementary', classes: ['panel', positionToString(this.state.panel.position)] },
 			{ id: Parts.STATUSBAR_PART, role: 'contentinfo', classes: ['statusbar'] }
 		].forEach(({ id, role, classes, options }) => {
 			const partContainer = this.createPart(id, role, classes);
-
-			if (!configurationService.getValue('workbench.useExperimentalGridLayout')) {
-				// TODO@Ben cleanup once moved to grid
-				// Insert all workbench parts at the beginning. Issue #52531
-				// This is primarily for the title bar to allow overriding -webkit-app-region
-				this.container.insertBefore(partContainer, this.container.lastChild);
-			}
 
 			this.getPart(id).create(partContainer, options);
 		});
@@ -396,7 +451,7 @@ export class Workbench extends Layout {
 
 		// Restore Editor Center Mode
 		if (this.state.editor.restoreCentered) {
-			this.centerEditorLayout(true);
+			this.centerEditorLayout(true, true);
 		}
 
 		// Emit a warning after 10s if restore does not complete

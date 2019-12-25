@@ -18,16 +18,14 @@ import { ExtHostLanguageFeatures } from 'vs/workbench/api/common/extHostLanguage
 import { MainThreadLanguageFeatures } from 'vs/workbench/api/browser/mainThreadLanguageFeatures';
 import { ExtHostCommands } from 'vs/workbench/api/common/extHostCommands';
 import { MainThreadCommands } from 'vs/workbench/api/browser/mainThreadCommands';
-import { IHeapService, NullHeapService } from 'vs/workbench/services/heap/common/heap';
 import { ExtHostDocuments } from 'vs/workbench/api/common/extHostDocuments';
 import { ExtHostDocumentsAndEditors } from 'vs/workbench/api/common/extHostDocumentsAndEditors';
 import { getDocumentSymbols } from 'vs/editor/contrib/quickOpen/quickOpen';
 import * as modes from 'vs/editor/common/modes';
 import { getCodeLensData } from 'vs/editor/contrib/codelens/codelens';
-import { getDefinitionsAtPosition, getImplementationsAtPosition, getTypeDefinitionsAtPosition, getDeclarationsAtPosition } from 'vs/editor/contrib/goToDefinition/goToDefinition';
+import { getDefinitionsAtPosition, getImplementationsAtPosition, getTypeDefinitionsAtPosition, getDeclarationsAtPosition, getReferencesAtPosition } from 'vs/editor/contrib/gotoSymbol/goToSymbol';
 import { getHover } from 'vs/editor/contrib/hover/getHover';
 import { getOccurrencesAtPosition } from 'vs/editor/contrib/wordHighlighter/wordHighlighter';
-import { provideReferences } from 'vs/editor/contrib/referenceSearch/referenceSearch';
 import { getCodeActions } from 'vs/editor/contrib/codeAction/codeAction';
 import { getWorkspaceSymbols } from 'vs/workbench/contrib/search/common/search';
 import { rename } from 'vs/editor/contrib/rename/rename';
@@ -37,7 +35,6 @@ import { getDocumentFormattingEditsUntilResult, getDocumentRangeFormattingEditsU
 import { getLinks } from 'vs/editor/contrib/links/getLinks';
 import { MainContext, ExtHostContext } from 'vs/workbench/api/common/extHost.protocol';
 import { ExtHostDiagnostics } from 'vs/workbench/api/common/extHostDiagnostics';
-import { ExtHostHeapService } from 'vs/workbench/api/common/extHostHeapService';
 import * as vscode from 'vscode';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { NullLogService } from 'vs/platform/log/common/log';
@@ -81,14 +78,13 @@ suite('ExtHostLanguageFeatures', function () {
 		{
 			let instantiationService = new TestInstantiationService();
 			instantiationService.stub(IMarkerService, MarkerService);
-			instantiationService.stub(IHeapService, NullHeapService);
 			inst = instantiationService;
 		}
 
 		originalErrorHandler = errorHandler.getUnexpectedErrorHandler();
 		setUnexpectedErrorHandler(() => { });
 
-		const extHostDocumentsAndEditors = new ExtHostDocumentsAndEditors(rpcProtocol);
+		const extHostDocumentsAndEditors = new ExtHostDocumentsAndEditors(rpcProtocol, new NullLogService());
 		extHostDocumentsAndEditors.$acceptDocumentsAndEditorsDelta({
 			addedDocuments: [{
 				isDirty: false,
@@ -102,16 +98,14 @@ suite('ExtHostLanguageFeatures', function () {
 		const extHostDocuments = new ExtHostDocuments(rpcProtocol, extHostDocumentsAndEditors);
 		rpcProtocol.set(ExtHostContext.ExtHostDocuments, extHostDocuments);
 
-		const heapService = new ExtHostHeapService();
-
-		const commands = new ExtHostCommands(rpcProtocol, heapService, new NullLogService());
+		const commands = new ExtHostCommands(rpcProtocol, new NullLogService());
 		rpcProtocol.set(ExtHostContext.ExtHostCommands, commands);
 		rpcProtocol.set(MainContext.MainThreadCommands, inst.createInstance(MainThreadCommands, rpcProtocol));
 
-		const diagnostics = new ExtHostDiagnostics(rpcProtocol);
+		const diagnostics = new ExtHostDiagnostics(rpcProtocol, new NullLogService());
 		rpcProtocol.set(ExtHostContext.ExtHostDiagnostics, diagnostics);
 
-		extHost = new ExtHostLanguageFeatures(rpcProtocol, null, extHostDocuments, commands, heapService, diagnostics, new NullLogService());
+		extHost = new ExtHostLanguageFeatures(rpcProtocol, null, extHostDocuments, commands, diagnostics, new NullLogService());
 		rpcProtocol.set(ExtHostContext.ExtHostLanguageFeatures, extHost);
 
 		mainThread = rpcProtocol.set(MainContext.MainThreadLanguageFeatures, inst.createInstance(MainThreadLanguageFeatures, rpcProtocol));
@@ -540,7 +534,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		let value = await provideReferences(model, new EditorPosition(1, 2), CancellationToken.None);
+		let value = await getReferencesAtPosition(model, new EditorPosition(1, 2), false, CancellationToken.None);
 		assert.equal(value.length, 2);
 		let [first, second] = value;
 		assert.equal(first.uri.path, '/second');
@@ -556,7 +550,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		let value = await provideReferences(model, new EditorPosition(1, 2), CancellationToken.None);
+		let value = await getReferencesAtPosition(model, new EditorPosition(1, 2), false, CancellationToken.None);
 		assert.equal(value.length, 1);
 		let [item] = value;
 		assert.deepEqual(item.range, { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 });
@@ -577,7 +571,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		const value = await provideReferences(model, new EditorPosition(1, 2), CancellationToken.None);
+		const value = await getReferencesAtPosition(model, new EditorPosition(1, 2), false, CancellationToken.None);
 		assert.equal(value.length, 1);
 	});
 
@@ -595,7 +589,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		const { actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
+		const { validActions: actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
 		assert.equal(actions.length, 2);
 		const [first, second] = actions;
 		assert.equal(first.title, 'Testing1');
@@ -619,7 +613,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		const { actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
+		const { validActions: actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
 		assert.equal(actions.length, 1);
 		const [first] = actions;
 		assert.equal(first.title, 'Testing1');
@@ -642,7 +636,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		const { actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
+		const { validActions: actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
 		assert.equal(actions.length, 1);
 	});
 
@@ -660,7 +654,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		await rpcProtocol.sync();
-		const { actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
+		const { validActions: actions } = await getCodeActions(model, model.getFullModelRange(), { type: 'manual' }, CancellationToken.None);
 		assert.equal(actions.length, 1);
 	});
 

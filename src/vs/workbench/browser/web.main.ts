@@ -4,45 +4,59 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mark } from 'vs/base/common/performance';
-import { domContentLoaded, addDisposableListener, EventType } from 'vs/base/browser/dom';
+import { domContentLoaded, addDisposableListener, EventType, addClass, EventHelper } from 'vs/base/browser/dom';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
-import { ILogService } from 'vs/platform/log/common/log';
+import { ILogService, ConsoleLogService, MultiplexLogService } from 'vs/platform/log/common/log';
 import { Disposable } from 'vs/base/common/lifecycle';
-import { SimpleLogService, SimpleProductService, SimpleWorkbenchEnvironmentService } from 'vs/workbench/browser/web.simpleservices';
+import { BrowserWorkbenchEnvironmentService } from 'vs/workbench/services/environment/browser/environmentService';
 import { Workbench } from 'vs/workbench/browser/workbench';
 import { IChannel } from 'vs/base/parts/ipc/common/ipc';
-import { REMOTE_FILE_SYSTEM_CHANNEL_NAME, RemoteExtensionsFileSystemProvider } from 'vs/platform/remote/common/remoteAgentFileSystemChannel';
+import { REMOTE_FILE_SYSTEM_CHANNEL_NAME, RemoteFileSystemProvider } from 'vs/platform/remote/common/remoteAgentFileSystemChannel';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
-import { IProductService } from 'vs/platform/product/common/product';
+import { IProductService } from 'vs/platform/product/common/productService';
+import product from 'vs/platform/product/common/product';
 import { RemoteAgentService } from 'vs/workbench/services/remote/browser/remoteAgentServiceImpl';
 import { RemoteAuthorityResolverService } from 'vs/platform/remote/browser/remoteAuthorityResolverService';
 import { IRemoteAuthorityResolverService } from 'vs/platform/remote/common/remoteAuthorityResolver';
 import { IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
 import { IFileService } from 'vs/platform/files/common/files';
-import { FileService } from 'vs/workbench/services/files/common/fileService';
+import { FileService } from 'vs/platform/files/common/fileService';
 import { Schemas } from 'vs/base/common/network';
 import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { onUnexpectedError } from 'vs/base/common/errors';
+import * as browser from 'vs/base/browser/browser';
+import * as platform from 'vs/base/common/platform';
 import { URI } from 'vs/base/common/uri';
 import { IWorkspaceInitializationPayload } from 'vs/platform/workspaces/common/workspaces';
 import { WorkspaceService } from 'vs/workbench/services/configuration/browser/configurationService';
 import { ConfigurationCache } from 'vs/workbench/services/configuration/browser/configurationCache';
-import { ConfigurationFileService } from 'vs/workbench/services/configuration/common/configuration';
-import { WebResources } from 'vs/workbench/browser/web.resources';
+import { ISignService } from 'vs/platform/sign/common/sign';
+import { SignService } from 'vs/platform/sign/browser/signService';
+import { hash } from 'vs/base/common/hash';
+import { IWorkbenchConstructionOptions, IWorkspace } from 'vs/workbench/workbench.web.api';
+import { FileUserDataProvider } from 'vs/workbench/services/userData/common/fileUserDataProvider';
+import { BACKUPS } from 'vs/platform/environment/common/environment';
+import { joinPath } from 'vs/base/common/resources';
+import { BrowserStorageService } from 'vs/platform/storage/browser/storageService';
+import { IStorageService } from 'vs/platform/storage/common/storage';
+import { getThemeTypeSelector, DARK, HIGH_CONTRAST, LIGHT } from 'vs/platform/theme/common/themeService';
+import { InMemoryFileSystemProvider } from 'vs/workbench/services/userData/common/inMemoryUserDataProvider';
+import { registerWindowDriver } from 'vs/platform/driver/browser/driver';
+import { BufferLogService } from 'vs/platform/log/common/bufferLog';
+import { FileLogService } from 'vs/platform/log/common/fileLogService';
+import { toLocalISOString } from 'vs/base/common/date';
+import { IndexedDBLogProvider } from 'vs/workbench/services/log/browser/indexedDBLogProvider';
+import { InMemoryLogProvider } from 'vs/workbench/services/log/common/inMemoryLogProvider';
+import { isWorkspaceToOpen, isFolderToOpen } from 'vs/platform/windows/common/windows';
+import { getWorkspaceIdentifier } from 'vs/workbench/services/workspaces/browser/workspaces';
 
-interface IWindowConfiguration {
-	settingsUri: URI;
-	remoteAuthority: string;
-	folderUri?: URI;
-	workspaceUri?: URI;
-}
+class BrowserMain extends Disposable {
 
-class CodeRendererMain extends Disposable {
-
-	private workbench: Workbench;
-
-	constructor(private readonly configuration: IWindowConfiguration) {
+	constructor(
+		private readonly domElement: HTMLElement,
+		private readonly configuration: IWorkbenchConstructionOptions
+	) {
 		super();
 	}
 
@@ -52,68 +66,133 @@ class CodeRendererMain extends Disposable {
 		await domContentLoaded();
 		mark('willStartWorkbench');
 
+		// Base Theme
+		this.restoreBaseTheme();
+
 		// Create Workbench
-		this.workbench = new Workbench(
-			document.body,
+		const workbench = new Workbench(
+			this.domElement,
 			services.serviceCollection,
 			services.logService
 		);
 
-		// Layout
-		this._register(addDisposableListener(window, EventType.RESIZE, () => this.workbench.layout()));
+		// Listeners
+		this.registerListeners(workbench, services.storageService);
 
-		// Resource Loading
-		this._register(new WebResources(<IFileService>services.serviceCollection.get(IFileService)));
-
-		// Workbench Lifecycle
-		this._register(this.workbench.onShutdown(() => this.dispose()));
+		// Driver
+		if (this.configuration.driver) {
+			(async () => this._register(await registerWindowDriver()))();
+		}
 
 		// Startup
-		this.workbench.startup();
+		workbench.startup();
 	}
 
-	private async initServices(): Promise<{ serviceCollection: ServiceCollection, logService: ILogService }> {
+	private registerListeners(workbench: Workbench, storageService: BrowserStorageService): void {
+
+		// Layout
+		const viewport = platform.isIOS && (<any>window).visualViewport ? (<any>window).visualViewport /** Visual viewport */ : window /** Layout viewport */;
+		this._register(addDisposableListener(viewport, EventType.RESIZE, () => {
+			workbench.layout();
+		}));
+
+		// Prevent the back/forward gestures in macOS
+		this._register(addDisposableListener(this.domElement, EventType.WHEEL, (e) => {
+			e.preventDefault();
+		}, { passive: false }));
+
+		// Prevent native context menus in web
+		this._register(addDisposableListener(this.domElement, EventType.CONTEXT_MENU, (e) => EventHelper.stop(e, true)));
+
+		// Prevent default navigation on drop
+		this._register(addDisposableListener(this.domElement, EventType.DROP, (e) => EventHelper.stop(e, true)));
+
+		// Workbench Lifecycle
+		this._register(workbench.onBeforeShutdown(event => {
+			if (storageService.hasPendingUpdate) {
+				console.warn('Unload prevented: pending storage update');
+				event.veto(true); // prevent data loss from pending storage update
+			}
+		}));
+		this._register(workbench.onWillShutdown(() => {
+			storageService.close();
+			this.saveBaseTheme();
+		}));
+		this._register(workbench.onShutdown(() => this.dispose()));
+
+		// Fullscreen
+		[EventType.FULLSCREEN_CHANGE, EventType.WK_FULLSCREEN_CHANGE].forEach(event => {
+			this._register(addDisposableListener(document, event, () => {
+				if (document.fullscreenElement || (<any>document).webkitFullscreenElement || (<any>document).webkitIsFullScreen) {
+					browser.setFullscreen(true);
+				} else {
+					browser.setFullscreen(false);
+				}
+			}));
+		});
+	}
+
+	private restoreBaseTheme(): void {
+		addClass(this.domElement, window.localStorage.getItem('vscode.baseTheme') || getThemeTypeSelector(DARK));
+	}
+
+	private saveBaseTheme(): void {
+		const classes = this.domElement.className;
+		const baseThemes = [DARK, LIGHT, HIGH_CONTRAST].map(baseTheme => getThemeTypeSelector(baseTheme));
+		for (const baseTheme of baseThemes) {
+			if (classes.indexOf(baseTheme) >= 0) {
+				window.localStorage.setItem('vscode.baseTheme', baseTheme);
+				break;
+			}
+		}
+	}
+
+	private async initServices(): Promise<{ serviceCollection: ServiceCollection, logService: ILogService, storageService: BrowserStorageService }> {
 		const serviceCollection = new ServiceCollection();
 
 		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		// NOTE: DO NOT ADD ANY OTHER SERVICE INTO THE COLLECTION HERE.
-		// CONTRIBUTE IT VIA WORKBENCH.MAIN.TS AND registerSingleton().
+		// CONTRIBUTE IT VIA WORKBENCH.WEB.MAIN.TS AND registerSingleton().
 		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 		// Log
-		const logService = new SimpleLogService();
+		const logsPath = URI.file(toLocalISOString(new Date()).replace(/-|:|\.\d+Z$/g, '')).with({ scheme: 'vscode-log' });
+		const logService = new BufferLogService(this.configuration.logLevel);
 		serviceCollection.set(ILogService, logService);
 
+		const payload = this.resolveWorkspaceInitializationPayload();
+
 		// Environment
-		const environmentService = this.createEnvironmentService();
+		const environmentService = new BrowserWorkbenchEnvironmentService({ workspaceId: payload.id, logsPath, ...this.configuration });
 		serviceCollection.set(IWorkbenchEnvironmentService, environmentService);
 
 		// Product
-		const productService = new SimpleProductService();
+		const productService = {
+			_serviceBrand: undefined,
+			...product
+		};
 		serviceCollection.set(IProductService, productService);
 
 		// Remote
-		const remoteAuthorityResolverService = new RemoteAuthorityResolverService();
+		const remoteAuthorityResolverService = new RemoteAuthorityResolverService(this.configuration.resourceUriProvider);
 		serviceCollection.set(IRemoteAuthorityResolverService, remoteAuthorityResolverService);
 
-		const remoteAgentService = this._register(new RemoteAgentService(environmentService, productService, remoteAuthorityResolverService));
+		// Signing
+		const signService = new SignService(environmentService.configuration.connectionToken);
+		serviceCollection.set(ISignService, signService);
+
+		// Remote Agent
+		const remoteAgentService = this._register(new RemoteAgentService(this.configuration.webSocketFactory, environmentService, productService, remoteAuthorityResolverService, signService, logService));
 		serviceCollection.set(IRemoteAgentService, remoteAgentService);
 
 		// Files
 		const fileService = this._register(new FileService(logService));
 		serviceCollection.set(IFileService, fileService);
+		this.registerFileSystemProviders(environmentService, fileService, remoteAgentService, logService, logsPath);
 
-		const connection = remoteAgentService.getConnection();
-		if (connection) {
-			const channel = connection.getChannel<IChannel>(REMOTE_FILE_SYSTEM_CHANNEL_NAME);
-			const remoteFileSystemProvider = this._register(new RemoteExtensionsFileSystemProvider(channel, remoteAgentService.getEnvironment()));
-			fileService.registerProvider(Schemas.vscodeRemote, remoteFileSystemProvider);
-		}
-
-		const payload = await this.resolveWorkspaceInitializationPayload();
-
-		await Promise.all([
-			this.createWorkspaceService(payload, fileService, remoteAgentService, logService).then(service => {
+		// Long running services (workspace, config, storage)
+		const services = await Promise.all([
+			this.createWorkspaceService(payload, environmentService, fileService, remoteAgentService, logService).then(service => {
 
 				// Workspace
 				serviceCollection.set(IWorkspaceContextService, service);
@@ -123,29 +202,84 @@ class CodeRendererMain extends Disposable {
 
 				return service;
 			}),
+
+			this.createStorageService(payload, environmentService, fileService, logService).then(service => {
+
+				// Storage
+				serviceCollection.set(IStorageService, service);
+
+				return service;
+			})
 		]);
 
-		return { serviceCollection, logService };
+		return { serviceCollection, logService, storageService: services[1] };
 	}
 
-	private createEnvironmentService(): IWorkbenchEnvironmentService {
-		const environmentService = new SimpleWorkbenchEnvironmentService();
-		environmentService.appRoot = '/web/';
-		environmentService.args = { _: [] };
-		environmentService.appSettingsHome = '/web/settings';
-		environmentService.settingsResource = this.configuration.settingsUri;
-		environmentService.appKeybindingsPath = '/web/settings/keybindings.json';
-		environmentService.logsPath = '/web/logs';
-		environmentService.debugExtensionHost = {
-			port: null,
-			break: false
-		};
-		return environmentService;
+	private registerFileSystemProviders(environmentService: IWorkbenchEnvironmentService, fileService: IFileService, remoteAgentService: IRemoteAgentService, logService: BufferLogService, logsPath: URI): void {
+
+		// Logger
+		(async () => {
+			if (browser.isEdge) {
+				fileService.registerProvider(logsPath.scheme, new InMemoryLogProvider(logsPath.scheme));
+			} else {
+				try {
+					const indexedDBLogProvider = new IndexedDBLogProvider(logsPath.scheme);
+					await indexedDBLogProvider.database;
+
+					fileService.registerProvider(logsPath.scheme, indexedDBLogProvider);
+				} catch (error) {
+					logService.info('Error while creating indexedDB log provider. Falling back to in-memory log provider.');
+					logService.error(error);
+
+					fileService.registerProvider(logsPath.scheme, new InMemoryLogProvider(logsPath.scheme));
+				}
+			}
+
+			const consoleLogService = new ConsoleLogService(logService.getLevel());
+			const fileLogService = new FileLogService('window', environmentService.logFile, logService.getLevel(), fileService);
+			logService.logger = new MultiplexLogService([consoleLogService, fileLogService]);
+		})();
+
+		const connection = remoteAgentService.getConnection();
+		if (connection) {
+
+			// Remote file system
+			const channel = connection.getChannel<IChannel>(REMOTE_FILE_SYSTEM_CHANNEL_NAME);
+			const remoteFileSystemProvider = this._register(new RemoteFileSystemProvider(channel, remoteAgentService.getEnvironment()));
+			fileService.registerProvider(Schemas.vscodeRemote, remoteFileSystemProvider);
+
+			if (!this.configuration.userDataProvider) {
+				const remoteUserDataUri = this.getRemoteUserDataUri();
+				if (remoteUserDataUri) {
+					this.configuration.userDataProvider = this._register(new FileUserDataProvider(remoteUserDataUri, joinPath(remoteUserDataUri, BACKUPS), remoteFileSystemProvider, environmentService));
+				}
+			}
+		}
+
+		// User data
+		if (!this.configuration.userDataProvider) {
+			this.configuration.userDataProvider = this._register(new InMemoryFileSystemProvider());
+		}
+		fileService.registerProvider(Schemas.userData, this.configuration.userDataProvider);
 	}
 
-	private async createWorkspaceService(payload: IWorkspaceInitializationPayload, fileService: FileService, remoteAgentService: IRemoteAgentService, logService: ILogService): Promise<WorkspaceService> {
+	private async createStorageService(payload: IWorkspaceInitializationPayload, environmentService: IWorkbenchEnvironmentService, fileService: IFileService, logService: ILogService): Promise<BrowserStorageService> {
+		const storageService = new BrowserStorageService(environmentService, fileService);
 
-		const workspaceService = new WorkspaceService({ userSettingsResource: this.configuration.settingsUri, remoteAuthority: this.configuration.remoteAuthority, configurationCache: new ConfigurationCache() }, new ConfigurationFileService(fileService), remoteAgentService);
+		try {
+			await storageService.initialize(payload);
+
+			return storageService;
+		} catch (error) {
+			onUnexpectedError(error);
+			logService.error(error);
+
+			return storageService;
+		}
+	}
+
+	private async createWorkspaceService(payload: IWorkspaceInitializationPayload, environmentService: IWorkbenchEnvironmentService, fileService: FileService, remoteAgentService: IRemoteAgentService, logService: ILogService): Promise<WorkspaceService> {
+		const workspaceService = new WorkspaceService({ remoteAuthority: this.configuration.remoteAuthority, configurationCache: new ConfigurationCache() }, environmentService, fileService, remoteAgentService);
 
 		try {
 			await workspaceService.initialize(payload);
@@ -159,52 +293,40 @@ class CodeRendererMain extends Disposable {
 		}
 	}
 
-	private async resolveWorkspaceInitializationPayload(): Promise<IWorkspaceInitializationPayload> {
-
-		const hash = (uri: URI) => {
-			return crypto.subtle.digest('SHA-1', new TextEncoder().encode(uri.toString())).then(buffer => {
-				// https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest#Converting_a_digest_to_a_hex_string
-				return Array.prototype.map.call(new Uint8Array(buffer), (value: number) => `00${value.toString(16)}`.slice(-2)).join('');
-			});
-		};
+	private resolveWorkspaceInitializationPayload(): IWorkspaceInitializationPayload {
+		let workspace: IWorkspace | undefined = undefined;
+		if (this.configuration.workspaceProvider) {
+			workspace = this.configuration.workspaceProvider.workspace;
+		}
 
 		// Multi-root workspace
-		if (this.configuration.workspaceUri) {
-			const id = await hash(this.configuration.workspaceUri);
-			return { id, configPath: this.configuration.workspaceUri };
+		if (workspace && isWorkspaceToOpen(workspace)) {
+			return getWorkspaceIdentifier(workspace.workspaceUri);
 		}
 
 		// Single-folder workspace
-		if (this.configuration.folderUri) {
-			const id = await hash(this.configuration.folderUri);
-			return { id, folder: this.configuration.folderUri };
+		if (workspace && isFolderToOpen(workspace)) {
+			return { id: hash(workspace.folderUri.toString()).toString(16), folder: workspace.folderUri };
 		}
 
 		return { id: 'empty-window' };
 	}
+
+	private getRemoteUserDataUri(): URI | undefined {
+		const element = document.getElementById('vscode-remote-user-data-uri');
+		if (element) {
+			const remoteUserDataPath = element.getAttribute('data-settings');
+			if (remoteUserDataPath) {
+				return joinPath(URI.revive(JSON.parse(remoteUserDataPath)), 'User');
+			}
+		}
+
+		return undefined;
+	}
 }
 
-export interface IWindowConfigurationContents {
-	settingsPath: string;
-	folderPath?: string;
-	workspacePath?: string;
-}
+export function main(domElement: HTMLElement, options: IWorkbenchConstructionOptions): Promise<void> {
+	const renderer = new BrowserMain(domElement, options);
 
-export function main(windowConfigurationContents: IWindowConfigurationContents): Promise<void> {
-	const windowConfiguration: IWindowConfiguration = {
-		settingsUri: toResource(windowConfigurationContents.settingsPath),
-		folderUri: windowConfigurationContents.folderPath ? toResource(windowConfigurationContents.folderPath) : undefined,
-		workspaceUri: windowConfigurationContents.workspacePath ? toResource(windowConfigurationContents.workspacePath) : undefined,
-		remoteAuthority: document.location.host
-	};
-	const renderer = new CodeRendererMain(windowConfiguration);
 	return renderer.open();
-}
-
-function toResource(path: string): URI {
-	return URI.from({
-		scheme: Schemas.vscodeRemote,
-		authority: document.location.host,
-		path
-	});
 }

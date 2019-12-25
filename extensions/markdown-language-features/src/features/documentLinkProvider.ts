@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as nls from 'vscode-nls';
 import { OpenDocumentLinkCommand } from '../commands/openDocumentLink';
-import { getUriForLinkWithKnownExternalScheme } from '../util/links';
+import { getUriForLinkWithKnownExternalScheme, isOfScheme, Schemes } from '../util/links';
 
 const localize = nls.loadMessageBundle();
 
@@ -18,6 +18,10 @@ function parseLink(
 ): { uri: vscode.Uri, tooltip?: string } {
 	const externalSchemeUri = getUriForLinkWithKnownExternalScheme(link);
 	if (externalSchemeUri) {
+		// Normalize VS Code links to target currently running version
+		if (isOfScheme(Schemes.vscode, link) || isOfScheme(Schemes['vscode-insiders'], link)) {
+			return { uri: vscode.Uri.parse(link).with({ scheme: vscode.env.uriScheme }) };
+		}
 		return { uri: externalSchemeUri };
 	}
 
@@ -38,8 +42,8 @@ function parseLink(
 	}
 
 	return {
-		uri: OpenDocumentLinkCommand.createCommandUri(resourcePath, tempUri.fragment),
-		tooltip: localize('documentLink.tooltip', 'follow link')
+		uri: OpenDocumentLinkCommand.createCommandUri(document.uri, resourcePath, tempUri.fragment),
+		tooltip: localize('documentLink.tooltip', 'Follow link')
 	};
 }
 
@@ -79,9 +83,9 @@ function extractDocumentLink(
 }
 
 export default class LinkProvider implements vscode.DocumentLinkProvider {
-	private readonly linkPattern = /(\[((!\[[^\]]*?\]\(\s*)([^\s\(\)]+?)\s*\)\]|[^\]]*\])\(\s*)(([^\s\(\)]|\(\S*?\))+)\s*(".*?")?\)/g;
-	private readonly referenceLinkPattern = /(\[([^\]]+)\]\[\s*?)([^\s\]]*?)\]/g;
-	private readonly definitionPattern = /^([\t ]*\[([^\]]+)\]:\s*)(\S+)/gm;
+	private readonly linkPattern = /(\[((!\[[^\]]*?\]\(\s*)([^\s\(\)]+?)\s*\)\]|(?:\\\]|[^\]])*\])\(\s*)(([^\s\(\)]|\(\S*?\))+)\s*(".*?")?\)/g;
+	private readonly referenceLinkPattern = /(\[((?:\\\]|[^\]])+)\]\[\s*?)([^\s\]]*?)\]/g;
+	private readonly definitionPattern = /^([\t ]*\[((?:\\\]|[^\]])+)\]:\s*)(\S+)/gm;
 
 	public provideDocumentLinks(
 		document: vscode.TextDocument,

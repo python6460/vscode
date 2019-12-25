@@ -48,13 +48,5 @@
 	padding-right: 12px;
 	margin-right: 5px;
 	max-width: fit-content;
-}
-
-.vs .monaco-workbench .screen-reader-detected-explanation .cancel {
-	background: url('close-statusview.svg') center center no-repeat;
-}
-
-.vs-dark .monaco-workbench .screen-reader-detected-explanation .cancel,
-.hc-black .monaco-workbench .screen-reader-detected-explanation .cancel {
-	background: url('close-statusview-inverse.svg') center center no-repeat;
+	max-width: -moz-fit-content;
 }

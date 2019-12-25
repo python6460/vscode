@@ -13,7 +13,7 @@ import * as nls from 'vs/nls';
 import { MenuId, MenuRegistry, SyncActionDescriptor } from 'vs/platform/actions/common/actions';
 import { CommandsRegistry } from 'vs/platform/commands/common/commands';
 import { ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
-import { WorkbenchStateContext, RemoteAuthorityContext } from 'vs/workbench/browser/contextkeys';
+import { WorkbenchStateContext, IsMacNativeContext, RemoteNameContext } from 'vs/workbench/browser/contextkeys';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
 import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
 import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
@@ -41,7 +41,7 @@ import { IExtensionService } from 'vs/workbench/services/extensions/common/exten
 import { REMOTE_HOST_SCHEME } from 'vs/platform/remote/common/remoteHosts';
 
 Registry.as<IEditorRegistry>(EditorExtensions.Editors).registerEditor(
-	new EditorDescriptor(
+	EditorDescriptor.create(
 		PreferencesEditor,
 		PreferencesEditor.ID,
 		nls.localize('defaultPreferencesEditor', "Default Preferences Editor")
@@ -52,7 +52,7 @@ Registry.as<IEditorRegistry>(EditorExtensions.Editors).registerEditor(
 );
 
 Registry.as<IEditorRegistry>(EditorExtensions.Editors).registerEditor(
-	new EditorDescriptor(
+	EditorDescriptor.create(
 		SettingsEditor2,
 		SettingsEditor2.ID,
 		nls.localize('settingsEditor2', "Settings Editor 2")
@@ -63,7 +63,7 @@ Registry.as<IEditorRegistry>(EditorExtensions.Editors).registerEditor(
 );
 
 Registry.as<IEditorRegistry>(EditorExtensions.Editors).registerEditor(
-	new EditorDescriptor(
+	EditorDescriptor.create(
 		KeybindingsEditor,
 		KeybindingsEditor.ID,
 		nls.localize('keybindingsEditor', "Keybindings Editor")
@@ -86,6 +86,20 @@ interface ISerializedPreferencesEditorInput {
 
 // Register Preferences Editor Input Factory
 class PreferencesEditorInputFactory implements IEditorInputFactory {
+
+	canSerialize(editorInput: EditorInput): boolean {
+		const input = <PreferencesEditorInput>editorInput;
+
+		if (input.details && input.master) {
+			const registry = Registry.as<IEditorInputFactoryRegistry>(EditorInputExtensions.EditorInputFactories);
+			const detailsInputFactory = registry.getEditorInputFactory(input.details.getTypeId());
+			const masterInputFactory = registry.getEditorInputFactory(input.master.getTypeId());
+
+			return !!(detailsInputFactory?.canSerialize(input.details) && masterInputFactory?.canSerialize(input.master));
+		}
+
+		return false;
+	}
 
 	serialize(editorInput: EditorInput): string | undefined {
 		const input = <PreferencesEditorInput>editorInput;
@@ -137,6 +151,10 @@ class PreferencesEditorInputFactory implements IEditorInputFactory {
 
 class KeybindingsEditorInputFactory implements IEditorInputFactory {
 
+	canSerialize(editorInput: EditorInput): boolean {
+		return true;
+	}
+
 	serialize(editorInput: EditorInput): string {
 		const input = <KeybindingsEditorInput>editorInput;
 		return JSON.stringify({
@@ -150,21 +168,18 @@ class KeybindingsEditorInputFactory implements IEditorInputFactory {
 	}
 }
 
-interface ISerializedSettingsEditor2EditorInput {
-}
-
 class SettingsEditor2InputFactory implements IEditorInputFactory {
 
-	serialize(input: SettingsEditor2Input): string {
-		const serialized: ISerializedSettingsEditor2EditorInput = {
-		};
+	canSerialize(editorInput: EditorInput): boolean {
+		return true;
+	}
 
-		return JSON.stringify(serialized);
+	serialize(input: SettingsEditor2Input): string {
+		return '{}';
 	}
 
 	deserialize(instantiationService: IInstantiationService, serializedEditorInput: string): SettingsEditor2Input {
-		return instantiationService.createInstance(
-			SettingsEditor2Input);
+		return instantiationService.createInstance(SettingsEditor2Input);
 	}
 }
 
@@ -174,6 +189,10 @@ interface ISerializedDefaultPreferencesEditorInput {
 
 // Register Default Preferences Editor Input Factory
 class DefaultPreferencesEditorInputFactory implements IEditorInputFactory {
+
+	canSerialize(editorInput: EditorInput): boolean {
+		return true;
+	}
 
 	serialize(editorInput: EditorInput): string {
 		const input = <DefaultPreferencesEditorInput>editorInput;
@@ -198,15 +217,15 @@ Registry.as<IEditorInputFactoryRegistry>(EditorInputExtensions.EditorInputFactor
 // Contribute Global Actions
 const category = nls.localize('preferences', "Preferences");
 const registry = Registry.as<IWorkbenchActionRegistry>(Extensions.WorkbenchActions);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenRawDefaultSettingsAction, OpenRawDefaultSettingsAction.ID, OpenRawDefaultSettingsAction.LABEL), 'Preferences: Open Raw Default Settings', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenSettingsJsonAction, OpenSettingsJsonAction.ID, OpenSettingsJsonAction.LABEL), 'Preferences: Open Settings (JSON)', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenSettings2Action, OpenSettings2Action.ID, OpenSettings2Action.LABEL), 'Preferences: Open Settings (UI)', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalSettingsAction, OpenGlobalSettingsAction.ID, OpenGlobalSettingsAction.LABEL), 'Preferences: Open User Settings', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenRawDefaultSettingsAction, OpenRawDefaultSettingsAction.ID, OpenRawDefaultSettingsAction.LABEL), 'Preferences: Open Default Settings (JSON)', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenSettingsJsonAction, OpenSettingsJsonAction.ID, OpenSettingsJsonAction.LABEL), 'Preferences: Open Settings (JSON)', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenSettings2Action, OpenSettings2Action.ID, OpenSettings2Action.LABEL), 'Preferences: Open Settings (UI)', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenGlobalSettingsAction, OpenGlobalSettingsAction.ID, OpenGlobalSettingsAction.LABEL), 'Preferences: Open User Settings', category);
 
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalKeybindingsAction, OpenGlobalKeybindingsAction.ID, OpenGlobalKeybindingsAction.LABEL, { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KEY_K, KeyMod.CtrlCmd | KeyCode.KEY_S) }), 'Preferences: Open Keyboard Shortcuts', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenDefaultKeybindingsFileAction, OpenDefaultKeybindingsFileAction.ID, OpenDefaultKeybindingsFileAction.LABEL), 'Preferences: Open Default Keyboard Shortcuts File', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalKeybindingsFileAction, OpenGlobalKeybindingsFileAction.ID, OpenGlobalKeybindingsFileAction.LABEL, { primary: 0 }), 'Preferences: Open Keyboard Shortcuts File', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(ConfigureLanguageBasedSettingsAction, ConfigureLanguageBasedSettingsAction.ID, ConfigureLanguageBasedSettingsAction.LABEL), 'Preferences: Configure Language Specific Settings...', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenGlobalKeybindingsAction, OpenGlobalKeybindingsAction.ID, OpenGlobalKeybindingsAction.LABEL, { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KEY_K, KeyMod.CtrlCmd | KeyCode.KEY_S) }), 'Preferences: Open Keyboard Shortcuts', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenDefaultKeybindingsFileAction, OpenDefaultKeybindingsFileAction.ID, OpenDefaultKeybindingsFileAction.LABEL), 'Preferences: Open Default Keyboard Shortcuts (JSON)', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(OpenGlobalKeybindingsFileAction, OpenGlobalKeybindingsFileAction.ID, OpenGlobalKeybindingsFileAction.LABEL, { primary: 0 }), 'Preferences: Open Keyboard Shortcuts (JSON)', category);
+registry.registerWorkbenchAction(SyncActionDescriptor.create(ConfigureLanguageBasedSettingsAction, ConfigureLanguageBasedSettingsAction.ID, ConfigureLanguageBasedSettingsAction.LABEL), 'Preferences: Configure Language Specific Settings...', category);
 
 KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: SETTINGS_COMMAND_OPEN_SETTINGS,
@@ -214,7 +233,8 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	when: null,
 	primary: KeyMod.CtrlCmd | KeyCode.US_COMMA,
 	handler: (accessor, args: string | undefined) => {
-		accessor.get(IPreferencesService).openSettings(undefined, typeof args === 'string' ? args : undefined);
+		const query = typeof args === 'string' ? args : undefined;
+		accessor.get(IPreferencesService).openSettings(query ? false : undefined, query);
 	}
 });
 
@@ -332,10 +352,10 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	weight: KeybindingWeight.WorkbenchContrib,
 	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDING_FOCUS),
 	primary: KeyMod.CtrlCmd | KeyCode.KEY_C,
-	handler: (accessor, args: any) => {
+	handler: async (accessor, args: any) => {
 		const control = accessor.get(IEditorService).activeControl as IKeybindingsEditor;
 		if (control) {
-			control.copyKeybinding(control.activeKeybindingEntry!);
+			await control.copyKeybinding(control.activeKeybindingEntry!);
 		}
 	}
 });
@@ -345,10 +365,10 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	weight: KeybindingWeight.WorkbenchContrib,
 	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDING_FOCUS),
 	primary: 0,
-	handler: (accessor, args: any) => {
+	handler: async (accessor, args: any) => {
 		const control = accessor.get(IEditorService).activeControl as IKeybindingsEditor;
 		if (control) {
-			control.copyKeybindingCommand(control.activeKeybindingEntry!);
+			await control.copyKeybindingCommand(control.activeKeybindingEntry!);
 		}
 	}
 });
@@ -371,7 +391,7 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 	constructor(
 		@IWorkbenchEnvironmentService environmentService: IWorkbenchEnvironmentService,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
-		@IWorkspaceContextService private readonly workpsaceContextService: IWorkspaceContextService,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@ILabelService labelService: ILabelService,
 		@IExtensionService extensionService: IExtensionService,
 	) {
@@ -380,12 +400,9 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 			command: {
 				id: OpenGlobalKeybindingsAction.ID,
 				title: OpenGlobalKeybindingsAction.LABEL,
-				iconLocation: {
-					light: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor.svg`)),
-					dark: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor-inverse.svg`))
-				}
+				icon: { id: 'codicon/go-to-file' }
 			},
-			when: ResourceContextKey.Resource.isEqualTo(URI.file(environmentService.appKeybindingsPath).toString()),
+			when: ResourceContextKey.Resource.isEqualTo(environmentService.keybindingsResource.toString()),
 			group: 'navigation',
 			order: 1
 		});
@@ -396,10 +413,7 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 			command: {
 				id: commandId,
 				title: OpenSettings2Action.LABEL,
-				iconLocation: {
-					light: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor.svg`)),
-					dark: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor-inverse.svg`))
-				}
+				icon: { id: 'codicon/go-to-file' }
 			},
 			when: ResourceContextKey.Resource.isEqualTo(environmentService.settingsResource.toString()),
 			group: 'navigation',
@@ -407,8 +421,8 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 		});
 
 		this.updatePreferencesEditorMenuItem();
-		this._register(workpsaceContextService.onDidChangeWorkbenchState(() => this.updatePreferencesEditorMenuItem()));
-		this._register(workpsaceContextService.onDidChangeWorkspaceFolders(() => this.updatePreferencesEditorMenuItemForWorkspaceFolders()));
+		this._register(workspaceContextService.onDidChangeWorkbenchState(() => this.updatePreferencesEditorMenuItem()));
+		this._register(workspaceContextService.onDidChangeWorkspaceFolders(() => this.updatePreferencesEditorMenuItemForWorkspaceFolders()));
 
 		extensionService.whenInstalledExtensionsRegistered()
 			.then(() => {
@@ -421,26 +435,23 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 				MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
 					command: {
 						id: OpenRemoteSettingsAction.ID,
-						title: { value: label, original: `Preferences: Open Remote Settings (${hostLabel})` },
-						category: nls.localize('preferencesCategory', "Preferences")
+						title: { value: label, original: `Open Remote Settings (${hostLabel})` },
+						category: { value: nls.localize('preferencesCategory', "Preferences"), original: 'Preferences' }
 					},
-					when: RemoteAuthorityContext.notEqualsTo('')
+					when: RemoteNameContext.notEqualsTo('')
 				});
 			});
 	}
 
 	private updatePreferencesEditorMenuItem() {
 		const commandId = '_workbench.openWorkspaceSettingsEditor';
-		if (this.workpsaceContextService.getWorkbenchState() === WorkbenchState.WORKSPACE && !CommandsRegistry.getCommand(commandId)) {
+		if (this.workspaceContextService.getWorkbenchState() === WorkbenchState.WORKSPACE && !CommandsRegistry.getCommand(commandId)) {
 			CommandsRegistry.registerCommand(commandId, () => this.preferencesService.openWorkspaceSettings(false));
 			MenuRegistry.appendMenuItem(MenuId.EditorTitle, {
 				command: {
 					id: commandId,
 					title: OpenSettings2Action.LABEL,
-					iconLocation: {
-						light: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor.svg`)),
-						dark: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor-inverse.svg`))
-					}
+					icon: { id: 'codicon/go-to-file' }
 				},
 				when: ContextKeyExpr.and(ResourceContextKey.Resource.isEqualTo(this.preferencesService.workspaceSettingsResource!.toString()), WorkbenchStateContext.isEqualTo('workspace')),
 				group: 'navigation',
@@ -451,11 +462,11 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 	}
 
 	private updatePreferencesEditorMenuItemForWorkspaceFolders() {
-		for (const folder of this.workpsaceContextService.getWorkspace().folders) {
+		for (const folder of this.workspaceContextService.getWorkspace().folders) {
 			const commandId = `_workbench.openFolderSettings.${folder.uri.toString()}`;
 			if (!CommandsRegistry.getCommand(commandId)) {
 				CommandsRegistry.registerCommand(commandId, () => {
-					if (this.workpsaceContextService.getWorkbenchState() === WorkbenchState.FOLDER) {
+					if (this.workspaceContextService.getWorkbenchState() === WorkbenchState.FOLDER) {
 						return this.preferencesService.openWorkspaceSettings(false);
 					} else {
 						return this.preferencesService.openFolderSettings(folder.uri, false);
@@ -465,10 +476,7 @@ class PreferencesActionsContribution extends Disposable implements IWorkbenchCon
 					command: {
 						id: commandId,
 						title: OpenSettings2Action.LABEL,
-						iconLocation: {
-							light: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor.svg`)),
-							dark: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/preferences-editor-inverse.svg`))
-						}
+						icon: { id: 'codicon/go-to-file' }
 					},
 					when: ContextKeyExpr.and(ResourceContextKey.Resource.isEqualTo(this.preferencesService.getFolderSettingsResource(folder.uri)!.toString())),
 					group: 'navigation',
@@ -494,8 +502,8 @@ CommandsRegistry.registerCommand(OpenFolderSettingsAction.ID, serviceAccessor =>
 MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
 	command: {
 		id: OpenFolderSettingsAction.ID,
-		title: { value: OpenFolderSettingsAction.LABEL, original: 'Preferences: Open Folder Settings' },
-		category: nls.localize('preferencesCategory', "Preferences")
+		title: { value: OpenFolderSettingsAction.LABEL, original: 'Open Folder Settings' },
+		category: { value: nls.localize('preferencesCategory', "Preferences"), original: 'Preferences' }
 	},
 	when: WorkbenchStateContext.isEqualTo('workspace')
 });
@@ -506,8 +514,8 @@ CommandsRegistry.registerCommand(OpenWorkspaceSettingsAction.ID, serviceAccessor
 MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
 	command: {
 		id: OpenWorkspaceSettingsAction.ID,
-		title: { value: OpenWorkspaceSettingsAction.LABEL, original: 'Preferences: Open Workspace Settings' },
-		category: nls.localize('preferencesCategory', "Preferences")
+		title: { value: OpenWorkspaceSettingsAction.LABEL, original: 'Open Workspace Settings' },
+		category: { value: nls.localize('preferencesCategory', "Preferences"), original: 'Preferences' }
 	},
 	when: WorkbenchStateContext.notEqualsTo('empty')
 });
@@ -532,10 +540,7 @@ MenuRegistry.appendMenuItem(MenuId.EditorTitle, {
 	command: {
 		id: OpenGlobalKeybindingsFileAction.ID,
 		title: OpenGlobalKeybindingsFileAction.LABEL,
-		iconLocation: {
-			light: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/edit-json.svg`)),
-			dark: URI.parse(require.toUrl(`vs/workbench/contrib/preferences/browser/media/edit-json-inverse.svg`))
-		}
+		icon: { id: 'codicon/go-to-file' }
 	},
 	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR),
 	group: 'navigation',
@@ -741,10 +746,20 @@ CommandsRegistry.registerCommand(SETTINGS_EDITOR_COMMAND_FILTER_ONLINE, serviceA
 	const control = serviceAccessor.get(IEditorService).activeControl as SettingsEditor2;
 	if (control instanceof SettingsEditor2) {
 		control.focusSearch(`@tag:usesOnlineServices`);
+	} else {
+		serviceAccessor.get(IPreferencesService).openSettings(false, '@tag:usesOnlineServices');
 	}
 });
 
 // Preferences menu
+
+MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
+	title: nls.localize({ key: 'miPreferences', comment: ['&& denotes a mnemonic'] }, "&&Preferences"),
+	submenu: MenuId.MenubarPreferencesMenu,
+	group: '5_autosave',
+	order: 2,
+	when: IsMacNativeContext.toNegated() // on macOS native the preferences menu is separate under the application menu
+});
 
 MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
 	group: '1_settings',
@@ -753,6 +768,33 @@ MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
 		title: nls.localize({ key: 'miOpenSettings', comment: ['&& denotes a mnemonic'] }, "&&Settings")
 	},
 	order: 1
+});
+
+MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	group: '2_configuration',
+	command: {
+		id: SETTINGS_COMMAND_OPEN_SETTINGS,
+		title: nls.localize('settings', "Settings")
+	},
+	order: 1
+});
+
+MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
+	group: '1_settings',
+	command: {
+		id: SETTINGS_EDITOR_COMMAND_FILTER_ONLINE,
+		title: nls.localize({ key: 'miOpenOnlineSettings', comment: ['&& denotes a mnemonic'] }, "&&Online Services Settings")
+	},
+	order: 2
+});
+
+MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	group: '2_configuration',
+	command: {
+		id: SETTINGS_EDITOR_COMMAND_FILTER_ONLINE,
+		title: nls.localize('onlineServices', "Online Services Settings")
+	},
+	order: 2
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
@@ -764,16 +806,22 @@ MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
 	order: 1
 });
 
+MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	group: '2_keybindings',
+	command: {
+		id: OpenGlobalKeybindingsAction.ID,
+		title: nls.localize('keyboardShortcuts', "Keyboard Shortcuts")
+	},
+	order: 1
+});
+
 // Editor tool items
 
 MenuRegistry.appendMenuItem(MenuId.EditorTitle, {
 	command: {
 		id: SETTINGS_EDITOR_COMMAND_SWITCH_TO_JSON,
 		title: nls.localize('openSettingsJson', "Open Settings (JSON)"),
-		iconLocation: {
-			dark: URI.parse(require.toUrl('vs/workbench/contrib/preferences/browser/media/edit-json-inverse.svg')),
-			light: URI.parse(require.toUrl('vs/workbench/contrib/preferences/browser/media/edit-json.svg'))
-		}
+		icon: { id: 'codicon/go-to-file' }
 	},
 	group: 'navigation',
 	order: 1,

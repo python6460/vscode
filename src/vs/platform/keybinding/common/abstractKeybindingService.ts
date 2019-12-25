@@ -11,11 +11,12 @@ import { KeyCode, Keybinding, ResolvedKeybinding } from 'vs/base/common/keyCodes
 import { Disposable, IDisposable } from 'vs/base/common/lifecycle';
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IContextKeyService, IContextKeyServiceTarget } from 'vs/platform/contextkey/common/contextkey';
-import { IKeybindingEvent, IKeybindingService, IKeyboardEvent } from 'vs/platform/keybinding/common/keybinding';
+import { IKeybindingEvent, IKeybindingService, IKeyboardEvent, KeybindingsSchemaContribution } from 'vs/platform/keybinding/common/keybinding';
 import { IResolveResult, KeybindingResolver } from 'vs/platform/keybinding/common/keybindingResolver';
 import { ResolvedKeybindingItem } from 'vs/platform/keybinding/common/resolvedKeybindingItem';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
+import { WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification } from 'vs/base/common/actions';
 
 interface CurrentChord {
 	keypress: string;
@@ -23,7 +24,7 @@ interface CurrentChord {
 }
 
 export abstract class AbstractKeybindingService extends Disposable implements IKeybindingService {
-	public _serviceBrand: any;
+	public _serviceBrand: undefined;
 
 	protected readonly _onDidUpdateKeybindings: Emitter<IKeybindingEvent> = this._register(new Emitter<IKeybindingEvent>());
 	get onDidUpdateKeybindings(): Event<IKeybindingEvent> {
@@ -56,17 +57,19 @@ export abstract class AbstractKeybindingService extends Disposable implements IK
 	public abstract resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding[];
 	public abstract resolveKeyboardEvent(keyboardEvent: IKeyboardEvent): ResolvedKeybinding;
 	public abstract resolveUserBinding(userBinding: string): ResolvedKeybinding[];
+	public abstract registerSchemaContribution(contribution: KeybindingsSchemaContribution): void;
 	public abstract _dumpDebugInfo(): string;
+	public abstract _dumpDebugInfoJSON(): string;
 
 	public getDefaultKeybindingsContent(): string {
 		return '';
 	}
 
-	public getDefaultKeybindings(): ResolvedKeybindingItem[] {
+	public getDefaultKeybindings(): readonly ResolvedKeybindingItem[] {
 		return this._getResolver().getDefaultKeybindings();
 	}
 
-	public getKeybindings(): ResolvedKeybindingItem[] {
+	public getKeybindings(): readonly ResolvedKeybindingItem[] {
 		return this._getResolver().getKeybindings();
 	}
 
@@ -194,13 +197,7 @@ export abstract class AbstractKeybindingService extends Disposable implements IK
 			} else {
 				this._commandService.executeCommand(resolveResult.commandId, resolveResult.commandArgs).then(undefined, err => this._notificationService.warn(err));
 			}
-			/* __GDPR__
-				"workbenchActionExecuted" : {
-					"id" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-					"from": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
-				}
-			*/
-			this._telemetryService.publicLog('workbenchActionExecuted', { id: resolveResult.commandId, from: 'keybinding' });
+			this._telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: resolveResult.commandId, from: 'keybinding' });
 		}
 
 		return shouldPreventDefault;

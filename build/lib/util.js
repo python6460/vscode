@@ -13,8 +13,6 @@ const fs = require("fs");
 const _rimraf = require("rimraf");
 const git = require("./git");
 const VinylFile = require("vinyl");
-const download_1 = require("../download/download");
-const REPO_ROOT = path.join(__dirname, '../../');
 const NoCancellationToken = { isCancellationRequested: () => false };
 function incremental(streamProvider, initial, supportsCancellation) {
     const input = es.through();
@@ -68,6 +66,9 @@ function fixWin32DirectoryPermissions() {
 exports.fixWin32DirectoryPermissions = fixWin32DirectoryPermissions;
 function setExecutableBit(pattern) {
     const setBit = es.mapSync(f => {
+        if (!f.stat) {
+            f.stat = { isFile() { return true; } };
+        }
         f.stat.mode = /* 100755 */ 33261;
         return f;
     });
@@ -120,7 +121,7 @@ function loadSourcemaps() {
             return;
         }
         if (!f.contents) {
-            cb(new Error('empty file'));
+            cb(undefined, f);
             return;
         }
         const contents = f.contents.toString('utf8');
@@ -165,22 +166,50 @@ function stripSourceMappingURL() {
 }
 exports.stripSourceMappingURL = stripSourceMappingURL;
 function rimraf(dir) {
-    let retries = 0;
-    const retry = (cb) => {
-        _rimraf(dir, { maxBusyTries: 1 }, (err) => {
-            if (!err) {
-                return cb();
-            }
-            if (err.code === 'ENOTEMPTY' && ++retries < 5) {
-                return setTimeout(() => retry(cb), 10);
-            }
-            return cb(err);
-        });
-    };
-    retry.taskName = `clean-${path.basename(dir)}`;
-    return retry;
+    const result = () => new Promise((c, e) => {
+        let retries = 0;
+        const retry = () => {
+            _rimraf(dir, { maxBusyTries: 1 }, (err) => {
+                if (!err) {
+                    return c();
+                }
+                if (err.code === 'ENOTEMPTY' && ++retries < 5) {
+                    return setTimeout(() => retry(), 10);
+                }
+                return e(err);
+            });
+        };
+        retry();
+    });
+    result.taskName = `clean-${path.basename(dir).toLowerCase()}`;
+    return result;
 }
 exports.rimraf = rimraf;
+function _rreaddir(dirPath, prepend, result) {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            _rreaddir(path.join(dirPath, entry.name), `${prepend}/${entry.name}`, result);
+        }
+        else {
+            result.push(`${prepend}/${entry.name}`);
+        }
+    }
+}
+function rreddir(dirPath) {
+    let result = [];
+    _rreaddir(dirPath, '', result);
+    return result;
+}
+exports.rreddir = rreddir;
+function ensureDir(dirPath) {
+    if (fs.existsSync(dirPath)) {
+        return;
+    }
+    ensureDir(path.dirname(dirPath));
+    fs.mkdirSync(dirPath);
+}
+exports.ensureDir = ensureDir;
 function getVersion(root) {
     let version = process.env['BUILD_SOURCEVERSION'];
     if (!version || !/^[0-9a-f]{40}$/i.test(version)) {
@@ -218,38 +247,10 @@ function versionStringToNumber(versionStr) {
     return parseInt(match[1], 10) * 1e4 + parseInt(match[2], 10) * 1e2 + parseInt(match[3], 10);
 }
 exports.versionStringToNumber = versionStringToNumber;
-function download(requestOptions) {
-    const result = es.through();
-    const filename = path.join(REPO_ROOT, `.build/tmp-${Date.now()}-${path.posix.basename(requestOptions.path)}`);
-    const opts = {
-        requestOptions: requestOptions,
-        destinationPath: filename
-    };
-    download_1.downloadInExternalProcess(opts).then(() => {
-        fs.stat(filename, (err, stat) => {
-            if (err) {
-                result.emit('error', err);
-                return;
-            }
-            fs.readFile(filename, (err, data) => {
-                if (err) {
-                    result.emit('error', err);
-                    return;
-                }
-                fs.unlink(filename, () => {
-                    result.emit('data', new VinylFile({
-                        path: path.normalize(requestOptions.path),
-                        stat: stat,
-                        base: path.normalize(requestOptions.path),
-                        contents: data
-                    }));
-                    result.emit('end');
-                });
-            });
-        });
-    }, (err) => {
-        result.emit('error', err);
+function streamToPromise(stream) {
+    return new Promise((c, e) => {
+        stream.on('error', err => e(err));
+        stream.on('end', () => c());
     });
-    return result;
 }
-exports.download = download;
+exports.streamToPromise = streamToPromise;
